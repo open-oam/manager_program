@@ -33,11 +33,3 @@ service Pinger {
   rpc UnloadEbpf(Empty) returns(Empty) {}
   rpc StreamPerf(Empty) returns(stream PerfMessage) {}
 }
-
-service Greeter {
-  rpc GetPerson(PersonRequest) returns(PersonResponse) {}
-}
-
-message PersonRequest { int32 id = 1; }
-
-message PersonResponse { string name = 1; }
