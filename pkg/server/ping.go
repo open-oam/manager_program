@@ -57,23 +57,35 @@ func listenForPerfEvents(bpf *loader.BpfInfo, mapName string, kill <-chan bool, 
 				// BPF was unloaded, end the stream
 				fmt.Println("Bpf Unloaded:", msg)
 				break
-			default:
-				// no-op
-			}
-
-			fmt.Println("Reading in PerfEvent")
-			if eventData, ok := <-perfEvents; ok {
+			case eventData := <-perfEvents:
 				reader := bytes.NewReader(eventData)
 				binary.Read(reader, binary.BigEndian, &event)
+
+				// bpf_get_ktime_ns returns time in LittleEndian order
+				// since we read it in as BigEndian, we need to convert it
+				b := make([]byte, 8)
+				binary.BigEndian.PutUint64(b, event.RecTime)
+
+				event.RecTime = uint64(binary.LittleEndian.Uint64(b))
 
 				fmt.Println("LFPE: Sending Perf Event")
 				// Send the event
 				events <- event
-			} else {
-				// Update channel closed
-				fmt.Println("Update channel closed")
-				break
 			}
+
+			// fmt.Println("Reading in PerfEvent")
+			// if eventData, ok := <-perfEvents; ok {
+			// 	reader := bytes.NewReader(eventData)
+			// 	binary.Read(reader, binary.BigEndian, &event)
+
+			// 	fmt.Println("LFPE: Sending Perf Event")
+			// 	// Send the event
+			// 	events <- event
+			// } else {
+			// 	// Update channel closed
+			// 	fmt.Println("Update channel closed")
+			// 	break
+			// }
 		}
 	}(events)
 

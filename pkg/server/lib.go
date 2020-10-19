@@ -47,10 +47,6 @@ func (self Server) StreamPerf(empt *gen.Empty, stream gen.Pinger_StreamPerfServe
 	for {
 		perfEvent := <-self.events
 
-		// var perfEvent PerfEventItem
-
-		// select {
-		// case perfEvent = <-self.events:
 		fmt.Println("Sending Event")
 		err := stream.SendMsg(&gen.PerfMessage{
 			Id:       uint32(perfEvent.ID),
@@ -63,8 +59,5 @@ func (self Server) StreamPerf(empt *gen.Empty, stream gen.Pinger_StreamPerfServe
 			fmt.Println(err)
 			return err
 		}
-		// default:
-		// 	fmt.Println("No event")
-		// }
 	}
 }
