@@ -9,24 +9,18 @@ import (
 )
 
 type Server struct {
-	people map[int32]string
 	bpf    *loader.BpfInfo
 	kill   chan bool
 	events chan PerfEventItem
 }
 
 func New() Server {
-	people := map[int32]string{
-		0: "Fisher",
-		1: "Jessie",
-	}
-
-	return Server{people, nil, make(chan bool, 1), make(chan PerfEventItem, 4096)}
+	return Server{nil, make(chan bool, 1), make(chan PerfEventItem, 4096)}
 }
 
 func (self Server) LoadEbpf(ctx context.Context, req *gen.LoadEbpfRequest) (*gen.Empty, error) {
 	self.bpf = loader.LoadNewBPF(req.Interface, req.File, req.Program)
-	fmt.Println(self.bpf)
+	fmt.Printf("%p", self.bpf)
 
 	fmt.Println("Starting perf events")
 	err := listenForPerfEvents(self.bpf, req.PerfMap, self.kill, self.events)
