@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/open-oam/manager_program/proto/gen";
+option go_package = "github.com/open-oam/manager_program/proto/ping";
 
 message Empty {}
 

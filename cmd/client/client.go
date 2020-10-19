@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/open-oam/manager_program/proto/gen"
+	pingpb "github.com/open-oam/manager_program/proto/ping"
 	"google.golang.org/grpc"
 )
 
@@ -31,14 +31,14 @@ func main() {
 	}
 	defer conn.Close()
 
-	client := gen.NewPingerClient(conn)
+	client := pingpb.NewPingerClient(conn)
 	fmt.Println("Running command:", *command)
 	if *command == "unload" {
-		client.UnloadEbpf(context.Background(), &gen.Empty{})
+		client.UnloadEbpf(context.Background(), &pingpb.Empty{})
 		os.Exit(0)
 	}
 
-	_, err = client.LoadEbpf(context.Background(), &gen.LoadEbpfRequest{
+	_, err = client.LoadEbpf(context.Background(), &pingpb.LoadEbpfRequest{
 		Interface: *iface,
 		File:      *elf,
 		Program:   *programName,
@@ -49,7 +49,7 @@ func main() {
 		panic("Unable to load eBPF")
 	}
 
-	stream, _ := client.StreamPerf(context.Background(), &gen.Empty{})
+	stream, _ := client.StreamPerf(context.Background(), &pingpb.Empty{})
 
 	for {
 		event, err := stream.Recv()

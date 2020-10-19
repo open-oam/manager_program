@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/open-oam/manager_program/internal/loader"
-	"github.com/open-oam/manager_program/proto/gen"
+	pingpb "github.com/open-oam/manager_program/proto/ping"
 )
 
 type Server struct {
@@ -18,7 +18,7 @@ func New() Server {
 	return Server{nil, make(chan bool, 1), make(chan PerfEventItem, 4096)}
 }
 
-func (self Server) LoadEbpf(ctx context.Context, req *gen.LoadEbpfRequest) (*gen.Empty, error) {
+func (self Server) LoadEbpf(ctx context.Context, req *pingpb.LoadEbpfRequest) (*pingpb.Empty, error) {
 	self.bpf = loader.LoadNewBPF(req.Interface, req.File, req.Program)
 	fmt.Printf("%p", self.bpf)
 
@@ -29,26 +29,26 @@ func (self Server) LoadEbpf(ctx context.Context, req *gen.LoadEbpfRequest) (*gen
 		return nil, err
 	}
 
-	return &gen.Empty{}, nil
+	return &pingpb.Empty{}, nil
 }
 
-func (self Server) UnloadEbpf(ctx context.Context, req *gen.Empty) (*gen.Empty, error) {
+func (self Server) UnloadEbpf(ctx context.Context, req *pingpb.Empty) (*pingpb.Empty, error) {
 	self.kill <- true
 
 	if self.bpf != nil {
 		self.bpf.Unload()
 	}
 
-	return &gen.Empty{}, nil
+	return &pingpb.Empty{}, nil
 }
 
-func (self Server) StreamPerf(empt *gen.Empty, stream gen.Pinger_StreamPerfServer) error {
+func (self Server) StreamPerf(empt *pingpb.Empty, stream pingpb.Pinger_StreamPerfServer) error {
 	fmt.Println("Streaming Perf Events")
 	for {
 		perfEvent := <-self.events
 
 		fmt.Println("Sending Event")
-		err := stream.SendMsg(&gen.PerfMessage{
+		err := stream.SendMsg(&pingpb.PerfMessage{
 			Id:       uint32(perfEvent.ID),
 			Seq:      uint32(perfEvent.Seq),
 			OrigTime: perfEvent.OrigTime,

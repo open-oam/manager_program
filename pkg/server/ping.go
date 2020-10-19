@@ -50,7 +50,6 @@ func listenForPerfEvents(bpf *loader.BpfInfo, mapName string, kill <-chan bool, 
 	fmt.Println("LFPE: Starting goroutine")
 	go func(events chan<- PerfEventItem) {
 		for {
-			fmt.Println("Looping on Events")
 			var event PerfEventItem
 			select {
 			case msg := <-kill:
@@ -72,20 +71,6 @@ func listenForPerfEvents(bpf *loader.BpfInfo, mapName string, kill <-chan bool, 
 				// Send the event
 				events <- event
 			}
-
-			// fmt.Println("Reading in PerfEvent")
-			// if eventData, ok := <-perfEvents; ok {
-			// 	reader := bytes.NewReader(eventData)
-			// 	binary.Read(reader, binary.BigEndian, &event)
-
-			// 	fmt.Println("LFPE: Sending Perf Event")
-			// 	// Send the event
-			// 	events <- event
-			// } else {
-			// 	// Update channel closed
-			// 	fmt.Println("Update channel closed")
-			// 	break
-			// }
 		}
 	}(events)
 
