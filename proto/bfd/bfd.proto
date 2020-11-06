@@ -1,3 +1,25 @@
 syntax = "proto3";
 
 option go_package = "github.com/open-oam/manager_program/proto/bfd";
+
+enum Mode { DEMAND = 0; ASYNC = 1; }
+
+message CreateSessionRequest {
+  string IPAddr = 1;
+  uint32 DesiredTx = 2; // 150 ms
+  uint32 DesiredRx = 3; // 150 ms
+  uint32 EchoRx = 4;    //  50 ms
+  uint32 DetectMulti = 5;
+  Mode mode = 6;
+}
+
+message CreateSessionResponse { string IPAddr = 1; }
+
+message SessionStateRequest { string IPAddr = 1; }
+
+message SessionStateResponse { uint32 State = 1; }
+
+service BFD {
+  rpc CreateSession(CreateSessionRequest) returns(CreateSessionResponse);
+  rpc SessionState(SessionStateRequest) returns(stream SessionStateResponse);
+}

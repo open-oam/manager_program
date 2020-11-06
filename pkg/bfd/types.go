@@ -14,6 +14,26 @@ type Session struct {
 	RemoteEchoRx uint32
 }
 
+// DefaultSession returns a default BFD session
+func DefaultSession() Session {
+	session := Session{}
+
+	session.MinTx = 150
+	session.EchoRx = 50
+	session.DetectMulti = 1
+
+	return session
+}
+
+// message CreateSessionRequest {
+// 	string IPAddr = 1;
+// 	uint32 DesiredTx = 2; // 150 ms
+// 	uint32 DesiredRx = 3; // 150 ms
+// 	uint32 EchoRx = 4;    //  50 ms
+// 	uint32 DetectMulti = 5;
+// 	Mode mode = 6;
+//   }
+
 // PerfEvent describes updates the BFD session
 // mapped by LocalDisc
 type PerfEvent struct {
