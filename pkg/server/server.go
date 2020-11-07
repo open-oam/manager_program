@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"sync"
 
+	"github.com/dropbox/goebpf"
 	"github.com/open-oam/manager_program/internal/loader"
 	"github.com/open-oam/manager_program/pkg/bfd"
 	bfdpb "github.com/open-oam/manager_program/proto/bfd"
@@ -24,9 +28,11 @@ type ServerConfig struct {
 	DetectMulti uint32
 }
 
+type LocalDisc uint32
+
 type Server struct {
-	sessions map[uint32]bfd.Session
-	ipAddrs  map[string]uint32
+	sessions map[LocalDisc]*bfd.SessionController
+	ipAddrs  map[string]LocalDisc
 	lock     *sync.Mutex
 	bpf      *loader.BpfInfo
 	port     uint16
@@ -35,34 +41,77 @@ type Server struct {
 }
 
 // New Create a new Server from the given config and interface
-func New(iface string, config ServerConfig) *Server {
+func New(iface string, config ServerConfig) (*Server, error) {
+	server := &Server{}
+
 	bpf := loader.LoadNewBPF(iface, "./xdp.elf", "xdp_prog")
+	perfmap := bpf.Bpf.GetMapByName("perfmap")
+
+	// Start listening to Perf Events
+	perf, err := goebpf.NewPerfEvents(perfmap)
+	if err != nil {
+		fmt.Printf("LFPE Error: %s\n", err)
+		return nil, err
+	}
+
+	perfEvents, err := perf.StartForAllProcessesAndCPUs(4096)
+	if err != nil {
+		fmt.Printf("LFPE Error: %s\n", err)
+		return nil, err
+	}
+
+	server.bpf = bpf
+
+	// Start reading from the bpf PerfEvents
+	go func() {
+		var event bfd.PerfEvent
+
+		for {
+			eventData := <-perfEvents
+			reader := bytes.NewReader(eventData)
+			binary.Read(reader, binary.BigEndian, &event)
+
+			// TODO: Figure out what happens if the LocalDisc
+			// doesn't exist
+			id := LocalDisc(event.LocalDisc)
+
+			server.lock.Lock()
+			defer server.lock.Unlock()
+
+			session := server.sessions[id]
+			session.SendEvent(event)
+		}
+
+	}()
 
 	// TODO: Finish BPF initialization, make goroutine to send events over
-
 	// server := Server{}
-	return &Server{bpf: bpf}
+	return server, nil
 }
 
-func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, detectMulti uint32, mode bfdpb.Mode) {
-	server.lock.Lock()
+func (server *Server) createNewSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, detectMulti uint32, mode bfdpb.Mode) {
 
+	// Initialize the Session Data
 	key := newKey(server.sessions)
-	session := bfd.DefaultSession()
+	sessionData := bfd.DefaultSession()
 
-	session.MinTx = desiredTx
-	session.RemoteEchoRx = desiredRx
-	session.EchoRx = echoRx
+	sessionData.MinTx = desiredTx
+	sessionData.RemoteEchoRx = desiredRx
+	sessionData.EchoRx = echoRx
 
-	server.sessions[key] = session
+	controller := bfd.NewController(server.bpf, sessionData)
+
+	// Need to lock to modify the map
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
+	server.sessions[key] = controller
 	server.ipAddrs[ipAddr] = key
-
-	server.lock.Unlock()
 }
 
-func newKey(sessions map[uint32]bfd.Session) uint32 {
+func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
 	for {
-		key := rand.Uint32()
+		key := LocalDisc(rand.Uint32())
 
 		if _, ok := sessions[key]; !ok {
 			return key
@@ -70,7 +119,7 @@ func newKey(sessions map[uint32]bfd.Session) uint32 {
 	}
 }
 
-// func (server Server) testLock() {
-// 	server.lock.Lock()
-// 	defer server.lock.Unlock()
-// }
+func (server Server) testLock() {
+	server.lock.Lock()
+	defer server.lock.Unlock()
+}

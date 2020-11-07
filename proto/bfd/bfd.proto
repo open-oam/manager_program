@@ -6,11 +6,11 @@ enum Mode { DEMAND = 0; ASYNC = 1; }
 
 message CreateSessionRequest {
   string IPAddr = 1;
-  uint32 DesiredTx = 2; // 150 ms
-  uint32 DesiredRx = 3; // 150 ms
-  uint32 EchoRx = 4;    //  50 ms
-  uint32 DetectMulti = 5;
-  Mode mode = 6;
+  uint32 DesiredTx = 2;   // 150 ms
+  uint32 DesiredRx = 3;   // 150 ms
+  uint32 EchoRx = 4;      //  50 ms
+  uint32 DetectMulti = 5; // 1
+  Mode mode = 6;          // DEMAND
 }
 
 message CreateSessionResponse { string IPAddr = 1; }
