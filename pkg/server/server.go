@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -35,7 +36,6 @@ type Server struct {
 	ipAddrs  map[string]LocalDisc
 	lock     *sync.Mutex
 	bpf      *loader.BpfInfo
-	port     uint16
 	// kill   chan bool
 	// events chan PerfEventItem
 }
@@ -71,14 +71,23 @@ func New(iface string, config ServerConfig) (*Server, error) {
 			reader := bytes.NewReader(eventData)
 			binary.Read(reader, binary.BigEndian, &event)
 
-			// TODO: Figure out what happens if the LocalDisc
-			// doesn't exist
 			id := LocalDisc(event.LocalDisc)
 
 			server.lock.Lock()
 			defer server.lock.Unlock()
 
 			session := server.sessions[id]
+
+			// TODO: Figure out what happens if the LocalDisc
+			// doesn't exist? Accept a new session?
+			// if _, ok := server.sessions[id]; !ok {
+			// 	server.acceptNewSession(...)
+			// }
+			// or:
+			// if id == 0 {
+			// 	server.acceptNewSession(...)
+			// }
+
 			session.SendEvent(event)
 		}
 
@@ -91,15 +100,17 @@ func New(iface string, config ServerConfig) (*Server, error) {
 
 func (server *Server) createNewSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, detectMulti uint32, mode bfdpb.Mode) {
 
-	// Initialize the Session Data
+	// Create a new session key
 	key := newKey(server.sessions)
-	sessionData := bfd.DefaultSession()
+
+	// Initialize the Session Data
+	sessionData := &bfd.DefaultSession()
 
 	sessionData.MinTx = desiredTx
 	sessionData.RemoteEchoRx = desiredRx
 	sessionData.EchoRx = echoRx
 
-	controller := bfd.NewController(server.bpf, sessionData)
+	controller := bfd.NewController(&server.bpf.Bpf, sessionData, ipAddr, key)
 
 	// Need to lock to modify the map
 	server.lock.Lock()
@@ -108,6 +119,10 @@ func (server *Server) createNewSession(ipAddr string, desiredTx uint32, desiredR
 	server.sessions[key] = controller
 	server.ipAddrs[ipAddr] = key
 }
+
+// func (server *Server) acceptNewSession(ipAddr string, ...) {
+
+// }
 
 func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
 	for {
@@ -119,7 +134,8 @@ func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
 	}
 }
 
-func (server Server) testLock() {
-	server.lock.Lock()
-	defer server.lock.Unlock()
+func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessionRequest) (*bfdpb.CreateSessionResponse, error) {
+	server.createNewSession(req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, req.DetectMulti, req.Mode)
+
+	return &bfdpb.CreateSessionResponse{IPAddr: req.IPAddr}, nil
 }
