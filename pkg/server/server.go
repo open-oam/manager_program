@@ -100,15 +100,16 @@ func New(iface string, config ServerConfig) (*Server, error) {
 
 func (server *Server) createNewSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, detectMulti uint32, mode bfdpb.Mode) {
 
-	// Create a new session key
+	// Create a new session keys
 	key := newKey(server.sessions)
 
 	// Initialize the Session Data
 	sessionData := &bfd.DefaultSession()
 
+	// todo: not sure mapping these correctly
 	sessionData.MinTx = desiredTx
-	sessionData.RemoteEchoRx = desiredRx
-	sessionData.EchoRx = echoRx
+	sessionData.MinRx = desiredRx
+	sessionData.MinEchoTx = echoRx
 
 	controller := bfd.NewController(&server.bpf.Bpf, sessionData, ipAddr, key)
 
