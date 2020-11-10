@@ -10,11 +10,8 @@ import (
 
 /*
 TODO:
-
 	- diagnostics
 	- closing handshake
-	- calc correct timeouts
-
 */
 
 // SessionController Controls a running BFD session
@@ -105,7 +102,13 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 	* will continuously send control packet until it recieves a perf event indicating a response,
 	* where it will change to UP state send final control packet and return.
 	 */
-	TxTimer := time.NewTimer(time.Duration(sessionData.MinTx) * time.Microsecond)
+
+	timeOut := sessionData.MinRx
+	if timeOut < sessionData.MinTx {
+		timeOut = sessionData.MinTx
+	}
+
+	txTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
 
 	// Send first control packet
 	sessionData.Flags |= FLAG_POLL
@@ -128,7 +131,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 
 				sessionData.State = STATE_UP
 
-				// send final conformation with updated discriminator and state
+				// must send final control packet for updated state
 				_, err := sckt.Write(sessionData.MarshalControl())
 				if err != nil {
 					fmt.Println(err)
@@ -143,7 +146,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 				// not sure what other events possible, but will be discarded
 			}
 
-		case txTimeOut := <-TxTimer.C:
+		case txTimeOut := <-txTimer.C:
 			fmt.Println("[%s] [%s : %d] sending echo packet", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 			// timeout send another control packet
@@ -151,16 +154,15 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 			if err != nil {
 				fmt.Println(err)
 			}
-			TxTimer.Reset(time.Duration(sessionData.MinTx) * time.Microsecond)
+			txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
 		}
 	}
 }
 
 func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn) *SessionInfo {
 	/*
-	* This function is on the passive side of handshake, and must respond with control packets.
-	* It begins in state INIT and will send control packets until recieving an event indicating
-	* the handshake is complete, where it will change to state UP and return.
+	* This function is on the passive side of handshake and will basically wait for perf event
+	* indicating state chang to UP
 	 */
 	resTimer := time.NewTimer(time.Duration(RESPONSE_TIMEOUT) * time.Millisecond)
 
@@ -181,13 +183,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 				// update own state
 				sessionData.State = STATE_UP
 
-				// must send final control packet for updated state
-				_, err := sckt.Write(sessionData.MarshalControl())
-				if err != nil {
-					fmt.Println(err)
-				}
-
-				return nil
+				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 
 			} else {
 				// In INIT state no other event is valid, drop it and wait for correct event
@@ -207,6 +203,8 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 
 	txTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 	rxTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
+
+	dropCount := 0
 
 	_, err := sckt.Write(sessionData.MarshalControl())
 	if err != nil {
@@ -246,9 +244,14 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 
 		case rxTimeOut := <-rxTimer.C:
 			fmt.Println("[%s] [%s : %d] remote down", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+
+			dropCount++
 			// Remote failed to send a packet quickly enough
-			sessionData.State = STATE_DOWN
-			return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out", sessionData.IpAddr, sessionData.LocalDisc)}
+			if dropCount >= int(sessionData.DetectMulti) {
+				sessionData.State = STATE_DOWN
+				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out", sessionData.IpAddr, sessionData.LocalDisc)}
+
+			}
 		}
 	}
 }
@@ -261,6 +264,8 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 
 	echoTxTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 	echoRxTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
+
+	dropCount := 0
 
 	_, err := sckt.Write(sessionData.MarshalEcho())
 	if err != nil {
@@ -301,8 +306,12 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 		case rxTimeOut := <-echoRxTimer.C:
 			fmt.Println("[%s] [%s : %d] remote down", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			// Remote failed to send a packet quickly enough
-			sessionData.State = STATE_DOWN
-			return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out", sessionData.IpAddr, sessionData.LocalDisc)}
+
+			dropCount++
+			if dropCount >= int(sessionData.DetectMulti) {
+				sessionData.State = STATE_DOWN
+				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out", sessionData.IpAddr, sessionData.LocalDisc)}
+			}
 		}
 	}
 }
@@ -333,9 +342,9 @@ func updateStateChange(event PerfEvent, sessionData *Session) {
 
 }
 
-// func (controller *SessionController) SendEvent(event PerfEvent) {
-// 	controller.events <- event
-// }
+func (controller *SessionController) SendEvent(event PerfEvent) {
+	controller.events <- event
+}
 
 // type StateUpdate int
 

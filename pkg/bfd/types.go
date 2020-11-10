@@ -125,22 +125,31 @@ type PerfEvent struct {
 
 const (
 	// ProgKeyPort Port that the BFD Program listens on
-	ProgKeyPort uint32 = 1
+	PROG_PORT uint32 = 1
 
-	// ProgKeyIfIndex Interface for the XDP Program
-	ProgKeyIfIndex uint32 = 2
+	// ProIfIndex Interface for the XDP Program
+	PROG_IF_IDX uint32 = 2
 
-	// ProgKeyMinRx Minimum RX time
-	ProgKeyMinRx uint32 = 3
+	// ProMinRx Minimum RX time
+	PROG_MIN_RX uint32 = 3
 
-	// ProgKeyMinTx Minimum TX time
-	ProgKeyMinTx uint32 = 4
+	// PROG_MIN_TX Minimum TX time
+	PROG_MIN_TX uint32 = 4
 
-	// ProgKeyMinEchoRx Minimum Echo RX time
-	ProgKeyMinEchoRx uint32 = 5
+	// PROG_ECHO_RX Minimum Echo RX time
+	PROG_ECHO_RX uint32 = 5
 
-	// ProgKeyDetectMulti Detect Multicast (?)
-	ProgKeyDetectMulti uint32 = 6
+	// PROG_DETECT_MULTI Detect Multicast (?)
+	PROG_DETECT_MULTI uint32 = 6
+)
+
+const (
+	PROG_DEFAULT_PORT        uint32 = 3784
+	PROG_DEFAULT_IF_IDX      uint32 = 0
+	PROG_DEFAULT_MIN_RX      uint32 = 150000
+	PROG_DEFAULT_MIN_TX      uint32 = 150000
+	PROG_DEFAULT_ECHO_RX     uint32 = 50000
+	PROG_DEFAULT_DETECT_MULT uint32 = 1
 )
 
 type SessionInfo struct {
