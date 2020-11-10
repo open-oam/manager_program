@@ -12,7 +12,7 @@ import (
 TODO:
 
 	- diagnostics
-	- closing hanshake
+	- closing handshake
 	- calc correct timeouts
 
 */
@@ -202,7 +202,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 
 func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn) *SessionInfo {
 	/*
-	* This function will poll packets on timeouts
+	* This function will send control packets on timeouts to maintain a session in async mode.
 	 */
 
 	txTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
@@ -273,20 +273,20 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 			fmt.Println("[%s] [%s : %d] recieved perf event", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
+			// exit
+			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
+				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown", sessionData.IpAddr, sessionData.LocalDisc)}
+			}
+
 			// Rest timer on echo reply
 			if event.Flags&EVENT_RX_ECHO > 0 {
 				echoTxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 			}
 
-			// recieved control packet parse state change
-			if event.Flags&EVENT_RX_CONTROL > 0 {
-				updateStateChange(event, sessionData)
+			// update anthing else
+			if event.Flags&0xf0 > 0 {
+				updateSessionChange(event, sessionData)
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
-			}
-
-			// exit
-			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
-				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 
 		case txTimeOut := <-echoTxTimer.C:
@@ -333,9 +333,9 @@ func updateStateChange(event PerfEvent, sessionData *Session) {
 
 }
 
-func (controller *SessionController) SendEvent(event PerfEvent) {
-	controller.events <- event
-}
+// func (controller *SessionController) SendEvent(event PerfEvent) {
+// 	controller.events <- event
+// }
 
 // type StateUpdate int
 

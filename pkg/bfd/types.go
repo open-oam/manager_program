@@ -30,7 +30,7 @@ const (
 	6 -- Concatenated Path Down
 	7 -- Administratively Down
 	8 -- Reverse Concatenated Path Down
-	 9-31 -- Reserved for future use
+	9-31 -- Reserved for future use
 */
 )
 
@@ -94,30 +94,8 @@ func DefaultSession() Session {
 	return session
 }
 
-// message CreateSessionRequest {
-// 	string IPAddr = 1;
-// 	uint32 DesiredTx = 2; // 150 ms
-// 	uint32 DesiredRx = 3; // 150 ms
-// 	uint32 EchoRx = 4;    //  50 ms
-// 	uint32 DetectMulti = 5;
-// 	Mode mode = 6;
-//   }
-
 // PerfEvent describes updates the BFD session
 // mapped by LocalDisc
-
-// /* BFD primary perf event flags */
-// #define FG_RECIEVE_CONTROL  0x00
-// #define FG_RECIEVE_ECHO     0x01
-// #define FG_RECIEVE_FINAL    0x02
-// #define FG_CREATE_SESSION   0x04
-// #define FG_TEARDOWN_SESSION 0x08
-
-// /* BFD perf event bitwise OR flags */
-// #define FG_CHANGED_STATE    0x10
-// #define FG_CHANGED_DEMAND   0x20
-// #define FG_CHANGED_DISC     0x40
-// #define FG_CHANGED_TIMING   0x80
 
 const (
 	EVENT_RX_CONTROL       uint16 = 0x00
