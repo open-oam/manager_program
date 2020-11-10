@@ -17,7 +17,7 @@ func main() {
 	// 	panic("-iface must be a non-empty interface.")
 	// }
 
-	iface := "ens4"
+	iface := "wlp4s0"
 
 	config := server.ServerConfig{Iface: iface}
 	server, err := server.New(config)
