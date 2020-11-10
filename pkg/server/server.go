@@ -6,7 +6,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"net"
 	"sync"
+	"time"
+	"unsafe"
 
 	"github.com/dropbox/goebpf"
 	"github.com/open-oam/manager_program/internal/loader"
@@ -32,10 +35,11 @@ type ServerConfig struct {
 type LocalDisc uint32
 
 type Server struct {
-	sessions map[LocalDisc]*bfd.SessionController
-	ipAddrs  map[string]LocalDisc
-	lock     *sync.Mutex
-	bpf      *loader.BpfInfo
+	sessions    map[LocalDisc]*bfd.SessionController
+	ipAddrs     map[string]LocalDisc
+	lock        *sync.Mutex
+	bpf         *loader.BpfInfo
+	sessionInfo chan bfd.SessionInfo
 	// kill   chan bool
 	// events chan PerfEventItem
 }
@@ -43,6 +47,7 @@ type Server struct {
 // New Create a new Server from the given config and interface
 func New(iface string, config ServerConfig) (*Server, error) {
 	server := &Server{}
+	server.sessionInfo = make(chan bfd.SessionInfo)
 
 	bpf := loader.LoadNewBPF(iface, "./xdp.elf", "xdp_prog")
 	perfmap := bpf.Bpf.GetMapByName("perfmap")
@@ -67,28 +72,47 @@ func New(iface string, config ServerConfig) (*Server, error) {
 		var event bfd.PerfEvent
 
 		for {
-			eventData := <-perfEvents
-			reader := bytes.NewReader(eventData)
-			binary.Read(reader, binary.BigEndian, &event)
+			select {
+			case eventData := <-perfEvents:
+				reader := bytes.NewReader(eventData)
+				binary.Read(reader, binary.BigEndian, &event)
 
-			id := LocalDisc(event.LocalDisc)
+				id := LocalDisc(event.LocalDisc)
 
-			server.lock.Lock()
-			defer server.lock.Unlock()
+				server.lock.Lock()
+				defer server.lock.Unlock()
 
-			session := server.sessions[id]
+				if _, ok := server.sessions[id]; !ok {
+					ipBytes := (*[4]byte)(unsafe.Pointer(&eventData.ipAddr))[:]
+					ip := net.IP.IPv4(ipBytes[3], ipBytes[2], ipBytes[1], ipBytes[0])
+					ipAddr = ip.String()
 
-			// TODO: Figure out what happens if the LocalDisc
-			// doesn't exist? Accept a new session?
-			// if _, ok := server.sessions[id]; !ok {
-			// 	server.acceptNewSession(...)
-			// }
-			// or:
-			// if id == 0 {
-			// 	server.acceptNewSession(...)
-			// }
+					controller := server.newSession(ipAddr, eventData.NewRemoteMinTx, eventData.NewRemoteMinRx, true)
+					controller.Id = id
 
-			session.SendEvent(event)
+					server.sessions[id] = controller
+					server.ipAddrs[ipAddr] = id
+				}
+
+				session := server.sessions[id]
+				session.SendEvent(event)
+			case sessionInfo := <-server.sessionInfo:
+				if sessionInfo.Error != nil {
+					fmt.Println("[%s] server: [%s : %d] had an error, tearing down", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+
+					server.lock.Lock()
+					defer server.lock.Unlock()
+
+					ipAddr := server.sessions[sessionInfo.LocalDisc].SessionData.ipAddr
+
+					// Delete the IpAddr -> LocalDisc
+					delete(server.ipAddrs, ipAddr)
+
+					// Delete the session
+					delete(server.sessions, sessionInfo.LocalDisc)
+				}
+			}
+
 		}
 
 	}()
@@ -98,27 +122,28 @@ func New(iface string, config ServerConfig) (*Server, error) {
 	return server, nil
 }
 
-func (server *Server) createNewSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, detectMulti uint32, mode bfdpb.Mode) {
+func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, detectMulti uint32, mode bfdpb.Mode, isInit bool) *bfd.SessionController {
 
 	// Create a new session keys
 	key := newKey(server.sessions)
 
 	// Initialize the Session Data
-	sessionData := &bfd.DefaultSession()
+	sessionData := new(bfd.Session)
+	*sessionData = bfd.DefaultSession()
+	sessionData.IpAddr = ipAddr
 
 	// todo: not sure mapping these correctly
 	sessionData.MinTx = desiredTx
 	sessionData.MinRx = desiredRx
 	sessionData.MinEchoTx = echoRx
 
-	controller := bfd.NewController(&server.bpf.Bpf, sessionData, ipAddr, key)
+	if isInit {
+		sessionData.State = bfd.STATE_INIT
+	} else {
+		sessionData.Sate = bfd.STATE_DOWN
+	}
 
-	// Need to lock to modify the map
-	server.lock.Lock()
-	defer server.lock.Unlock()
-
-	server.sessions[key] = controller
-	server.ipAddrs[ipAddr] = key
+	return bfd.NewController(uint32(key), &server.bpf.Bpf, sessionData, server.sessionInfo)
 }
 
 // func (server *Server) acceptNewSession(ipAddr string, ...) {
@@ -136,7 +161,13 @@ func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
 }
 
 func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessionRequest) (*bfdpb.CreateSessionResponse, error) {
-	server.createNewSession(req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, req.DetectMulti, req.Mode)
+	server.lock.Lock()
+	defer server.lock.Unlock()
+
+	controller := server.createNewSession(req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, req.DetectMulti, req.Mode)
+	key := LocalDics(controller.Id)
+	server.sessions[key] = controller
+	server.ipAddrs[ipAddr] = key
 
 	return &bfdpb.CreateSessionResponse{IPAddr: req.IPAddr}, nil
 }

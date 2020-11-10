@@ -53,9 +53,6 @@ type Session struct {
 	// rate in us of control packets remote system -> local system.
 	MinRx uint32
 
-	// rate in us of echo packets remote system -> local system.
-	MinEchoRx uint32
-
 	// rate in us of echo packets local system -> remote system.
 	MinEchoTx uint32
 }
@@ -71,8 +68,9 @@ type EchoPacket struct {
 
 // BFD constants
 const (
-	VERSION  uint8  = 1
-	BFD_PORT string = "3784"
+	VERSION          uint8  = 1
+	BFD_PORT         string = "3784"
+	RESPONSE_TIMEOUT uint32 = 2000 // miliseconds
 )
 
 // BFD Flags
@@ -89,8 +87,9 @@ func DefaultSession() Session {
 	session := Session{}
 
 	session.MinTx = 150000    // Microseconds
-	session.MinEchoRx = 50000 // Microseconds
+	session.MinEchoTx = 50000 // Microseconds
 	session.DetectMulti = 1
+	session.State = STATE_DOWN
 
 	return session
 }
@@ -106,14 +105,40 @@ func DefaultSession() Session {
 
 // PerfEvent describes updates the BFD session
 // mapped by LocalDisc
-type PerfEvent struct {
-	// IpAddr uint32
-	Flags      uint16
-	LocalDisc  uint32
-	Timestamp  uint32
-	Diagnostic uint8
 
+// /* BFD primary perf event flags */
+// #define FG_RECIEVE_CONTROL  0x00
+// #define FG_RECIEVE_ECHO     0x01
+// #define FG_RECIEVE_FINAL    0x02
+// #define FG_CREATE_SESSION   0x04
+// #define FG_TEARDOWN_SESSION 0x08
+
+// /* BFD perf event bitwise OR flags */
+// #define FG_CHANGED_STATE    0x10
+// #define FG_CHANGED_DEMAND   0x20
+// #define FG_CHANGED_DISC     0x40
+// #define FG_CHANGED_TIMING   0x80
+
+const (
+	EVENT_RX_CONTROL       uint16 = 0x00
+	EVENT_RX_ECHO          uint16 = 0x01
+	EVENT_RX_FINAL         uint16 = 0x02
+	EVENT_CREATE_SESSION   uint16 = 0x04
+	EVENT_TEARDOWN_SESSION uint16 = 0x08
+
+	EVENT_CHNG_STATE  uint16 = 0x10
+	EVENT_CHNG_DEMAND uint16 = 0x20
+	EVENT_CHNG_DISC   uint16 = 0x40
+	EVENT_CHNG_TIMING uint16 = 0x80
+)
+
+type PerfEvent struct {
+	Diagnostic      uint8
 	NewRemoteState  BfdState
+	Flags           uint16
+	LocalDisc       uint32
+	IpAddr          uint32
+	Timestamp       uint32
 	NewRemoteDisc   uint32
 	NewRemoteMinTx  uint32
 	NewRemoteMinRx  uint32
@@ -140,6 +165,12 @@ const (
 	ProgKeyDetectMulti uint32 = 6
 )
 
+type SessionInfo struct {
+	LocalId uint32
+	State   BfdState
+	Error   error
+}
+
 func (ses *Session) MarshalControl() []byte {
 	buf := bytes.NewBuffer([]uint8{})
 	length := uint8(24)
@@ -154,7 +185,7 @@ func (ses *Session) MarshalControl() []byte {
 	binary.Write(buf, binary.BigEndian, ses.RemoteDisc)
 	binary.Write(buf, binary.BigEndian, uint32(ses.MinTx))
 	binary.Write(buf, binary.BigEndian, uint32(ses.MinRx))
-	binary.Write(buf, binary.BigEndian, uint32(ses.MinEchoRx))
+	binary.Write(buf, binary.BigEndian, uint32(ses.MinEchoTx))
 
 	return buf.Bytes()
 }
@@ -164,13 +195,13 @@ func (ses *Session) MarshalEcho() []byte {
 
 	// not sure what code and reply stand for
 	//binary.Write(buf, binary.BigEndian, ( (pck.Code | (pck.Reply << 4) | (VERSION << 5))
-	binary.Write(buf, binary.BigEndian, (1 | (1 << 4) | (VERSION << 5)))
+	binary.Write(buf, binary.BigEndian, (1 | (0 << 4) | (VERSION << 5)))
 
 	binary.Write(buf, binary.BigEndian, ses.LocalDisc)
 	binary.Write(buf, binary.BigEndian, ses.RemoteDisc)
 
-	// not sure type of timestamp
-	binary.Write(buf, binary.BigEndian, time.Now().Format(time.StampMicro))
+	// need to be microsecond timestamp
+	binary.Write(buf, binary.BigEndian, int32((int64(time.Nanosecond) * time.Now().UnixNano() / int64(time.Microsecond))))
 
 	return buf.Bytes()
 }

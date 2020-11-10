@@ -6,21 +6,32 @@ import (
 	"fmt"
 	"os"
 
-	pingpb "github.com/open-oam/manager_program/proto/ping"
+	bfdpb "github.com/open-oam/manager_program/proto/ping"
 	"google.golang.org/grpc"
 )
 
-var iface = flag.String("iface", "enp5s0", "Interface to bind XDP program to")
-var elf = flag.String("elf", "./xdp.elf", "clang/llvm compiled eBPF")
-var programName = flag.String("program", "xdp_prog", "Name of XDP program (function name)")
-var perfmap = flag.String("map", "perfmap", "Name of perfmap to read from")
-var command = flag.String("cmd", "load", "load or unload a bpf")
+// var iface = flag.String("iface", "enp5s0", "Interface to bind XDP program to")
+// var elf = flag.String("elf", "./xdp.elf", "clang/llvm compiled eBPF")
+// var programName = flag.String("program", "xdp_prog", "Name of XDP program (function name)")
+// var perfmap = flag.String("map", "perfmap", "Name of perfmap to read from")
+// var command = flag.String("cmd", "load", "load or unload a bpf")
+
+var remote = flag.String("remote", "", "Remote server to create session with")
 
 func main() {
 	flag.Parse()
-	if *iface == "" {
-		panic("-iface is required.")
+	if *remote == "" {
+		panic("-remote is required.")
 	}
+
+	ip := net.ParseIP(*remote)
+	if ip == nil || ip.To4() == nil {
+		panic("-remote must be a valid IPv4 address in dot notation")
+	}
+
+	// if *iface == "" {
+	// 	panic("-iface is required.")
+	// }
 
 	fmt.Println("Connecting to server")
 	opts := []grpc.DialOption{grpc.WithInsecure()}
@@ -31,32 +42,34 @@ func main() {
 	}
 	defer conn.Close()
 
-	client := pingpb.NewPingerClient(conn)
-	fmt.Println("Running command:", *command)
-	if *command == "unload" {
-		client.UnloadEbpf(context.Background(), &pingpb.Empty{})
-		os.Exit(0)
-	}
+	client := pingpb.NewBFDClient(conn)
 
-	_, err = client.LoadEbpf(context.Background(), &pingpb.LoadEbpfRequest{
-		Interface: *iface,
-		File:      *elf,
-		Program:   *programName,
-		PerfMap:   *perfmap,
-	})
+	req := &CreateSessionRequest{IPAddr: ip.String()}
+	resp, err := client.CreateNewSession(context.Background(), req)
+
 	if err != nil {
-		fmt.Println(err)
-		panic("Unable to load eBPF")
+		d := fmt.Sprintf("Unable to create session for %s", ip.String())
+		panic(d)
 	}
 
-	stream, _ := client.StreamPerf(context.Background(), &pingpb.Empty{})
+	fmt.Println("Successfully started session with %s", ip.String())
+	// client.
+	// fmt.Println("Running command:", *command)
+	// if *command == "unload" {
+	// 	client.UnloadEbpf(context.Background(), &pingpb.Empty{})
+	// 	os.Exit(0)
+	// }
 
-	for {
-		event, err := stream.Recv()
-		if err != nil {
-			panic(err)
-		}
+	// _, err = client.LoadEbpf(context.Background(), &pingpb.LoadEbpfRequest{
+	// 	Interface: *iface,
+	// 	File:      *elf,
+	// 	Program:   *programName,
+	// 	PerfMap:   *perfmap,
+	// })
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	panic("Unable to load eBPF")
+	// }
 
-		fmt.Println(event)
-	}
+	// stream, _ := client.StreamPerf(context.Background(), &pingpb.Empty{})
 }

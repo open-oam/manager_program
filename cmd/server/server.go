@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/open-oam/manager_program/pkg/server"
-	pingpb "github.com/open-oam/manager_program/proto/ping"
+	bfdpb "github.com/open-oam/manager_program/proto/bfd"
 	"google.golang.org/grpc"
 )
 
@@ -21,7 +21,7 @@ func main() {
 
 	fmt.Println("Creating Server")
 	grpcServer := grpc.NewServer(opts...)
-	pingpb.RegisterPingerServer(grpcServer, server)
+	bfdpb.RegisterBFDServer(grpcServer, server)
 
 	fmt.Println("Running Server")
 	grpcServer.Serve(lis)
