@@ -42,15 +42,21 @@ type Server struct {
 	ipAddrs     map[string]LocalDisc
 	sessionInfo chan bfd.SessionInfo
 	lock        *sync.Mutex
-	bpf         *loader.BpfInfo
+	Bpf         *loader.BpfInfo
 	// kill   chan bool
 	// events chan PerfEventItem
 }
 
 // New Create a new Server from the given config and interface
 func New(config ServerConfig) (*Server, error) {
+	rand.Seed(int64(time.Now().Nanosecond()))
+
 	server := &Server{}
+	server.sessions = make(map[LocalDisc]*bfd.SessionController)
+	server.subs = make(map[LocalDisc]chan bfd.SessionInfo)
+	server.ipAddrs = make(map[string]LocalDisc)
 	server.sessionInfo = make(chan bfd.SessionInfo)
+	server.lock = new(sync.Mutex)
 
 	bpf := loader.LoadNewBPF(config.Iface, "./xdp.elf", "xdp_prog")
 
@@ -61,17 +67,20 @@ func New(config ServerConfig) (*Server, error) {
 	programInfo := bpf.Bpf.GetMapByName("program_info")
 
 	programInfo.Insert(bfd.PROG_PORT, bfd.PROG_DEFAULT_PORT)
-	programInfo.Insert(bfd.PROG_IF_IDX, bfd.PROG_DEFAULT_IF_IDX)
+	programInfo.Insert(bfd.PROG_IF_IDX, bpf.Iface)
 	programInfo.Insert(bfd.PROG_MIN_RX, bfd.PROG_DEFAULT_MIN_RX)
 	programInfo.Insert(bfd.PROG_MIN_TX, bfd.PROG_DEFAULT_MIN_TX)
 	programInfo.Insert(bfd.PROG_ECHO_RX, bfd.PROG_ECHO_RX)
 	programInfo.Insert(bfd.PROG_DETECT_MULTI, bfd.PROG_DETECT_MULTI)
 
 	// === Perf event handling ===
-	// perfmap := bpf.Bpf.GetMapByName("perfmap")
+	perfmap := bpf.Bpf.GetMapByName("perfmap")
+	if perfmap == nil {
+		panic("unable to get perfmap")
+	}
 
 	// Start listening to Perf Events
-	perf, err := goebpf.NewPerfEvents(bpf.Perfmap)
+	perf, err := goebpf.NewPerfEvents(perfmap)
 	if err != nil {
 		fmt.Printf("LFPE Error: %s\n", err)
 		return nil, err
@@ -83,7 +92,7 @@ func New(config ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	server.bpf = bpf
+	server.Bpf = bpf
 
 	// Start reading from the bpf PerfEvents
 	go func() {
@@ -92,6 +101,8 @@ func New(config ServerConfig) (*Server, error) {
 		for {
 			select {
 			case eventData := <-perfEvents:
+				fmt.Println("[%s] [%d] recieved perfevent", sessionInfo.LocalId, time.Now().Format(time.StampMicro))
+
 				reader := bytes.NewReader(eventData)
 				binary.Read(reader, binary.BigEndian, &event)
 
@@ -137,7 +148,7 @@ func New(config ServerConfig) (*Server, error) {
 	}()
 
 	// Finally, attach the interface:
-	server.bpf.AttachInterface()
+	server.Bpf.AttachToInterface(config.Iface)
 
 	// TODO: Finish BPF initialization, make goroutine to send events over
 	// server := Server{}
@@ -148,6 +159,8 @@ func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint
 
 	// Create a new session keys
 	key := newKey(server.sessions)
+
+	fmt.Printf("New Session: %d", key)
 
 	// Initialize the Session Data
 	sessionData := new(bfd.Session)
@@ -166,7 +179,7 @@ func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint
 		sessionData.State = bfd.STATE_DOWN
 	}
 
-	return bfd.NewController(uint32(key), &server.bpf.Bpf, sessionData, server.sessionInfo)
+	return bfd.NewController(uint32(key), &server.Bpf.Bpf, sessionData, server.sessionInfo)
 }
 
 // func (server *Server) acceptNewSession(ipAddr string, ...) {
@@ -207,6 +220,8 @@ func (server *Server) removeSub(ipAddr string) {
 }
 
 func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessionRequest) (*bfdpb.CreateSessionResponse, error) {
+	fmt.Printf("Create Session: %s\n", req.IPAddr)
+	
 	server.lock.Lock()
 	defer server.lock.Unlock()
 

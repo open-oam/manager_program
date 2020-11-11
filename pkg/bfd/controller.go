@@ -120,7 +120,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 	for {
 		select {
 		case event := <-events:
-			fmt.Println("[%s] [%s : %d] recieved perf event", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
 			// TODO: Unsure if correct parsing from perfevent
@@ -147,7 +147,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 			}
 
 		case txTimeOut := <-txTimer.C:
-			fmt.Println("[%s] [%s : %d] sending echo packet", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] sending echo packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 			// timeout send another control packet
 			_, err := sckt.Write(sessionData.MarshalControl())
@@ -175,7 +175,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 	for {
 		select {
 		case event := <-events:
-			fmt.Println("[%s] [%s : %d] recieved perf event", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
 			if event.NewRemoteState == STATE_UP {
@@ -190,7 +190,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 			}
 
 		case resTimeOut := <-resTimer.C:
-			fmt.Println("[%s] [%s : %d] remote timed out", resTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] remote timed out\n", resTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			return &SessionInfo{sessionData.LocalDisc, STATE_INIT, fmt.Errorf("[%s : %d] remote timed out", sessionData.IpAddr, sessionData.LocalDisc)}
 		}
 	}
@@ -201,8 +201,14 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 	* This function will send control packets on timeouts to maintain a session in async mode.
 	 */
 
-	txTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
-	rxTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
+	timeOut := sessionData.MinRx
+	if timeOut < sessionData.MinTx {
+		timeOut = sessionData.MinTx
+	}
+
+	fmt.Printf("[%s] [%s : %d] Entering Async with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
+	txTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
+	rxTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
 
 	dropCount := 0
 
@@ -214,7 +220,7 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 	for {
 		select {
 		case event := <-events:
-			fmt.Println("[%s] [%s : %d] recieved perf event", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
 			// exit
@@ -234,22 +240,22 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 			}
 
 		case txTimeOut := <-rxTimer.C:
-			fmt.Println("[%s] [%s : %d] sending echo packet", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
-			_, err := sckt.Write(sessionData.MarshalEcho())
+			fmt.Printf("[%s] [%s : %d] sending control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			_, err := sckt.Write(sessionData.MarshalControl())
 			if err != nil {
 				fmt.Println(err)
 			}
 
-			txTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
+			txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
 
 		case rxTimeOut := <-rxTimer.C:
-			fmt.Println("[%s] [%s : %d] remote down", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] remote down\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 			dropCount++
 			// Remote failed to send a packet quickly enough
 			if dropCount >= int(sessionData.DetectMulti) {
 				sessionData.State = STATE_DOWN
-				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out", sessionData.IpAddr, sessionData.LocalDisc)}
+				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
 
 			}
 		}
@@ -275,12 +281,12 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 	for {
 		select {
 		case event := <-events:
-			fmt.Println("[%s] [%s : %d] recieved perf event", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
 			// exit
 			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
-				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown", sessionData.IpAddr, sessionData.LocalDisc)}
+				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown\n", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 
 			// Rest timer on echo reply
@@ -295,7 +301,7 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 			}
 
 		case txTimeOut := <-echoTxTimer.C:
-			fmt.Println("[%s] [%s : %d] sending echo packet", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] sending echo packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			_, err := sckt.Write(sessionData.MarshalEcho())
 			if err != nil {
 				fmt.Println(err)
@@ -304,13 +310,13 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 			echoTxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 
 		case rxTimeOut := <-echoRxTimer.C:
-			fmt.Println("[%s] [%s : %d] remote down", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] remote down\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			// Remote failed to send a packet quickly enough
 
 			dropCount++
 			if dropCount >= int(sessionData.DetectMulti) {
 				sessionData.State = STATE_DOWN
-				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out", sessionData.IpAddr, sessionData.LocalDisc)}
+				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 		}
 	}

@@ -76,8 +76,8 @@ func (storage *BpfInfo) AttachInterface() {
 	}
 }
 
-func (storage *BpfInfo) AttachToInterface(iface int) {
-	storage.Iface = iface
+func (storage *BpfInfo) AttachToInterface(iface string) {
+	// storage.Iface = iface
 
 	// Attach to interface
 	err := storage.Xdp.Attach(iface)

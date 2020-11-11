@@ -4,9 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
+	"net"
 
-	bfdpb "github.com/open-oam/manager_program/proto/ping"
+	bfdpb "github.com/open-oam/manager_program/proto/bfd"
 	"google.golang.org/grpc"
 )
 
@@ -17,6 +17,7 @@ import (
 // var command = flag.String("cmd", "load", "load or unload a bpf")
 
 var remote = flag.String("remote", "", "Remote server to create session with")
+var stream = flag.Bool("stream", false, "Stream events for the given session")
 
 func main() {
 	flag.Parse()
@@ -35,32 +36,49 @@ func main() {
 
 	fmt.Println("Connecting to server")
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	conn, err := grpc.Dial("localhost:5555", opts...)
+	conn, err := grpc.Dial("10.11.1.2:5555", opts...)
 	if err != nil {
 		fmt.Println(err)
 		panic("Unable to connect to server")
 	}
 	defer conn.Close()
 
-	client := pingpb.NewBFDClient(conn)
+	client := bfdpb.NewBFDClient(conn)
 
-	req := &CreateSessionRequest{IPAddr: ip.String()}
-	resp, err := client.CreateNewSession(context.Background(), req)
+	if !*stream {
+		req := &bfdpb.CreateSessionRequest{IPAddr: ip.String()}
+		resp, err := client.CreateSession(context.Background(), req)
+		if err != nil {
+			d := fmt.Sprintf("Unable to create session for %s", ip.String())
+			panic(d)
+		}
 
-	if err != nil {
-		d := fmt.Sprintf("Unable to create session for %s", ip.String())
-		panic(d)
+		fmt.Printf("Successfully started session with %s\n", resp.IPAddr)
+	} else {
+		req := &bfdpb.SessionStateRequest{IPAddr: ip.String()}
+		infoEvents, err := client.SessionState(context.Background(), req)
+		if err != nil {
+			d := fmt.Sprintf("Unable to create session for %s", ip.String())
+			panic(d)
+		}
+
+		for {
+			info, err := infoEvents.Recv()
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(info)
+		}
 	}
 
-	fmt.Println("Successfully started session with %s", ip.String())
 	// client.
 	// fmt.Println("Running command:", *command)
 	// if *command == "unload" {
-	// 	client.UnloadEbpf(context.Background(), &pingpb.Empty{})
+	// 	client.UnloadEbpf(context.Background(), &bfdpb.Empty{})
 	// 	os.Exit(0)
 	// }
 
-	// _, err = client.LoadEbpf(context.Background(), &pingpb.LoadEbpfRequest{
+	// _, err = client.LoadEbpf(context.Background(), &bfdpb.LoadEbpfRequest{
 	// 	Interface: *iface,
 	// 	File:      *elf,
 	// 	Program:   *programName,
@@ -71,5 +89,5 @@ func main() {
 	// 	panic("Unable to load eBPF")
 	// }
 
-	// stream, _ := client.StreamPerf(context.Background(), &pingpb.Empty{})
+	// stream, _ := client.StreamPerf(context.Background(), &bfdpb.Empty{})
 }
