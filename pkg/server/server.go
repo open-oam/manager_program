@@ -101,17 +101,18 @@ func New(config ServerConfig) (*Server, error) {
 		for {
 			select {
 			case eventData := <-perfEvents:
-				fmt.Println("[%s] [%d] recieved perfevent", sessionInfo.LocalId, time.Now().Format(time.StampMicro))
-
 				reader := bytes.NewReader(eventData)
 				binary.Read(reader, binary.BigEndian, &event)
-
 				id := LocalDisc(event.LocalDisc)
+
+				fmt.Println("[%s] [%d] recieved perfevent", event.LocalDisc, time.Now().Format(time.StampMicro))
 
 				server.lock.Lock()
 				defer server.lock.Unlock()
 
 				if _, ok := server.sessions[id]; !ok {
+					fmt.Println("[%s] [%d] perfevent -> create new session", event.LocalDisc, time.Now().Format(time.StampMicro))
+
 					ipBytes := (*[4]byte)(unsafe.Pointer(&event.IpAddr))[:]
 					ip := net.IPv4(ipBytes[3], ipBytes[2], ipBytes[1], ipBytes[0])
 					ipAddr := ip.String()
@@ -159,8 +160,7 @@ func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint
 
 	// Create a new session keys
 	key := newKey(server.sessions)
-
-	fmt.Printf("New Session: %d", key)
+	fmt.Printf("New Session: %d\n", key)
 
 	// Initialize the Session Data
 	sessionData := new(bfd.Session)
@@ -169,9 +169,17 @@ func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint
 	sessionData.Flags |= bfd.FLAG_CONTROL_PLANE_IND // because we encapsulate in udp
 
 	// todo: not sure mapping these correctly
-	sessionData.MinTx = desiredTx
-	sessionData.MinRx = desiredRx
-	sessionData.MinEchoTx = echoRx
+	if desiredTx > 0 {
+		sessionData.MinTx = desiredTx
+	}
+
+	if desiredRx > 0 {
+		sessionData.MinRx = desiredRx
+	}
+
+	if echoRx > 0 {
+		sessionData.MinEchoTx = echoRx
+	}
 
 	if isInit {
 		sessionData.State = bfd.STATE_INIT
@@ -221,7 +229,7 @@ func (server *Server) removeSub(ipAddr string) {
 
 func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessionRequest) (*bfdpb.CreateSessionResponse, error) {
 	fmt.Printf("Create Session: %s\n", req.IPAddr)
-	
+
 	server.lock.Lock()
 	defer server.lock.Unlock()
 

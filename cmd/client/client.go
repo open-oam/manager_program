@@ -36,7 +36,7 @@ func main() {
 
 	fmt.Println("Connecting to server")
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	conn, err := grpc.Dial("10.11.1.2:5555", opts...)
+	conn, err := grpc.Dial("localhost:5555", opts...)
 	if err != nil {
 		fmt.Println(err)
 		panic("Unable to connect to server")
@@ -49,8 +49,8 @@ func main() {
 		req := &bfdpb.CreateSessionRequest{IPAddr: ip.String()}
 		resp, err := client.CreateSession(context.Background(), req)
 		if err != nil {
-			d := fmt.Sprintf("Unable to create session for %s", ip.String())
-			panic(d)
+			fmt.Printf("Unable to create session for %s\n", ip.String())
+			panic(err)
 		}
 
 		fmt.Printf("Successfully started session with %s\n", resp.IPAddr)

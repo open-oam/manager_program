@@ -17,7 +17,7 @@ func main() {
 	// 	panic("-iface must be a non-empty interface.")
 	// }
 
-	iface := "veth0"
+	iface := "test"
 
 	config := server.ServerConfig{Iface: iface}
 	server, err := server.New(config)
@@ -26,8 +26,8 @@ func main() {
 	}
 	defer server.Bpf.Unload()
 
-	fmt.Println("Listening on 10.11.1.2:5555")
-	lis, err := net.Listen("tcp", "10.11.1.2:5555")
+	fmt.Println("Listening on localhost:5555")
+	lis, err := net.Listen("tcp", "localhost:5555")
 	if err != nil {
 		panic("Unable to listen on 5555")
 	}

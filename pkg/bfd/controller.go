@@ -32,7 +32,9 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	sessionMap := (*bpf).GetMapByName("session_map")
 	events := make(chan PerfEvent)
 
+	sessionData.LocalDisc = id
 	controller.Id = id
+
 	controller.events = events
 	controller.sessionMap = sessionMap
 	controller.SessionData = sessionData
@@ -108,6 +110,8 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 		timeOut = sessionData.MinTx
 	}
 
+	fmt.Printf("[%s] [%s : %d] Starting session with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
+
 	txTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
 
 	// Send first control packet
@@ -123,8 +127,8 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
-			// TODO: Unsure if correct parsing from perfevent
 			if event.NewRemoteState == STATE_INIT {
+				// TODO: Set bpfmap key values here:
 				sessionData.RemoteDisc = event.NewRemoteDisc
 				sessionData.MinRx = event.NewRemoteMinTx
 				sessionData.MinEchoTx = event.NewRemoteEchoRx
@@ -147,13 +151,14 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 			}
 
 		case txTimeOut := <-txTimer.C:
-			fmt.Printf("[%s] [%s : %d] sending echo packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] sending control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 			// timeout send another control packet
 			_, err := sckt.Write(sessionData.MarshalControl())
 			if err != nil {
 				fmt.Println(err)
 			}
+
 			txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
 		}
 	}
@@ -181,6 +186,9 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 			if event.NewRemoteState == STATE_UP {
 
 				// update own state
+				sessionData.RemoteDisc = event.NewRemoteDisc
+				sessionData.MinRx = event.NewRemoteMinTx
+				sessionData.MinEchoTx = event.NewRemoteEchoRx
 				sessionData.State = STATE_UP
 
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
