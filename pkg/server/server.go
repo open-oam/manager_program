@@ -133,9 +133,6 @@ func New(config ServerConfig) (*Server, error) {
 				binary.Read(reader, binary.LittleEndian, &event)
 				id := LocalDisc(event.LocalDisc)
 
-				fmt.Printf("[%s] [%d] recieved perfevent in server routine.\n", time.Now().Format(time.StampMicro), event.LocalDisc)
-				fmt.Println(event)
-
 				if _, ok := server.sessions[id]; !ok {
 					server.lock.Lock()
 					defer server.lock.Unlock()
@@ -155,7 +152,6 @@ func New(config ServerConfig) (*Server, error) {
 
 				session := server.sessions[id]
 				session.SendEvent(event)
-				fmt.Printf("[%s] [%d] Sent event to session routine.\n", time.Now().Format(time.StampMicro), event.LocalDisc)
 
 			case sessionInfo := <-server.sessionInfo:
 				if sessionInfo.Error != nil {
@@ -166,6 +162,7 @@ func New(config ServerConfig) (*Server, error) {
 
 					ipAddr := server.sessions[id].SessionData.IpAddr
 					fmt.Printf("[%s] server: [%s : %d] had an error, tearing down\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
+					fmt.Printf("[%s] server error: [%s : %d] %s\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId, sessionInfo.Error.Error())
 
 					// Delete the IpAddr -> LocalDisc
 					delete(server.ipAddrs, ipAddr)
