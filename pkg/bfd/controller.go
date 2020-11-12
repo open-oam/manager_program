@@ -155,6 +155,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 
 			} else if event.NewRemoteState == STATE_UP && sessionData.State == STATE_UP {
 				// waiting for other side
+				fmt.Printf("[%s] [%s : %d] Recieved remote State up, handshake complete moving to async.\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 				// remove poll flag
 				sessionData.Flags &= (FLAG_POLL ^ 0xff)
@@ -166,7 +167,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 			}
 
 		case txTimeOut := <-txTimer.C:
-			fmt.Printf("[%s] [%s : %d] sending initial DOWN control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] sending handshake control packet with state %d\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, sessionData.State)
 
 			// timeout send another control packet
 			_, err := sckt.Write(sessionData.MarshalControl())
