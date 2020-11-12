@@ -39,6 +39,8 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	controller.sessionMap = sessionMap
 	controller.SessionData = sessionData
 
+	writeSession(sessionMap, sessionData)
+
 	// Start listening for perf events
 	go func() {
 
@@ -64,7 +66,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 
 			case STATE_INIT:
 				// This indicates we are passive side and need to reply to handshake
-				sesInfo := initSession(events, sessionData, sckt)
+				sesInfo := initSession(events, sessionData, sessionMap, sckt)
 				sessionInfo <- *sesInfo
 
 				if sesInfo.Error != nil {
@@ -76,9 +78,9 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 				var sesInfo *SessionInfo
 
 				if sessionData.Flags&FLAG_DEMAND > 0 {
-					sesInfo = maintainSessionDemand(events, sessionData, sckt)
+					sesInfo = maintainSessionDemand(events, sessionData, sessionMap, sckt)
 				} else {
-					sesInfo = maintainSessionAsync(events, sessionData, sckt)
+					sesInfo = maintainSessionAsync(events, sessionData, sessionMap, sckt)
 				}
 
 				sessionInfo <- *sesInfo
@@ -127,11 +129,14 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
+			// TODO: Write the session data:
+			// writeSession(sessionMap, sessionData)
 			if event.NewRemoteState == STATE_INIT {
+
 				// TODO: Set bpfmap key values here:
 				sessionData.RemoteDisc = event.NewRemoteDisc
-				sessionData.MinRx = event.NewRemoteMinTx
-				sessionData.MinEchoTx = event.NewRemoteEchoRx
+				sessionData.RemoteMinRx = event.NewRemoteMinTx
+				sessionData.RemoteEchoRx = event.NewRemoteEchoRx
 
 				sessionData.State = STATE_UP
 
@@ -164,7 +169,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 	}
 }
 
-func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn) *SessionInfo {
+func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function is on the passive side of handshake and will basically wait for perf event
 	* indicating state chang to UP
@@ -185,11 +190,13 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 
 			if event.NewRemoteState == STATE_UP {
 
-				// update own state
+				// update own state, must do here not in updateSessionChange because
+				// it is the first time seeing these and change flags may not be set
 				sessionData.RemoteDisc = event.NewRemoteDisc
-				sessionData.MinRx = event.NewRemoteMinTx
-				sessionData.MinEchoTx = event.NewRemoteEchoRx
+				sessionData.RemoteMinTx = event.NewRemoteMinTx
+				sessionData.RemoteEchoRx = event.NewRemoteEchoRx
 				sessionData.State = STATE_UP
+				writeSession(sessionMap, sessionData)
 
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 
@@ -204,19 +211,24 @@ func initSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn)
 	}
 }
 
-func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn) *SessionInfo {
+func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function will send control packets on timeouts to maintain a session in async mode.
 	 */
 
-	timeOut := sessionData.MinRx
-	if timeOut < sessionData.MinTx {
-		timeOut = sessionData.MinTx
+	timeOutTx := sessionData.MinTx
+	if timeOutTx < sessionData.RemoteMinRx {
+		timeOutTx = sessionData.RemoteMinRx
 	}
 
-	fmt.Printf("[%s] [%s : %d] Entering Async with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
-	txTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
-	rxTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
+	timeOutRx := sessionData.MinRx
+	if timeOutRx < sessionData.RemoteMinTx {
+		timeOutRx = sessionData.RemoteMinTx
+	}
+
+	fmt.Printf("[%s] [%s : %d] Entering Async with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOutTx)*time.Microsecond)
+	txTimer := time.NewTimer(time.Duration(timeOutTx) * time.Microsecond)
+	rxTimer := time.NewTimer(time.Duration(timeOutRx) * time.Microsecond)
 
 	dropCount := 0
 
@@ -238,12 +250,13 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 
 			// recieved control packet reset timer
 			if event.Flags&EVENT_RX_CONTROL > 0 {
-				rxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
+				rxTimer.Reset(time.Duration(timeOutRx) * time.Microsecond)
 			}
 
 			// update anthing else
 			if event.Flags&0xf0 > 0 {
 				updateSessionChange(event, sessionData)
+				writeSession(sessionMap, sessionData)
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 			}
 
@@ -254,7 +267,7 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 				fmt.Println(err)
 			}
 
-			txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
+			txTimer.Reset(time.Duration(timeOutTx) * time.Microsecond)
 
 		case rxTimeOut := <-rxTimer.C:
 			fmt.Printf("[%s] [%s : %d] remote down\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
@@ -270,14 +283,19 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sckt *net
 	}
 }
 
-func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn) *SessionInfo {
+func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function will send echos on timeouts and ensure recieveing echos on time outs until state change.
 	* TODO: Funcitonality would need to be added for asymmetric echos.
 	 */
 
-	echoTxTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
-	echoRxTimer := time.NewTimer(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
+	echoTimeOut := sessionData.MinEchoTx
+	if echoTimeOut < sessionData.RemoteEchoRx {
+		echoTimeOut = sessionData.RemoteEchoRx
+	}
+
+	echoTxTimer := time.NewTimer(time.Duration(echoTimeOut) * time.Microsecond)
+	echoRxTimer := time.NewTimer(time.Duration(echoTimeOut) * time.Microsecond)
 
 	dropCount := 0
 
@@ -305,6 +323,7 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sckt *ne
 			// update anthing else
 			if event.Flags&0xf0 > 0 {
 				updateSessionChange(event, sessionData)
+				writeSession(sessionMap, sessionData)
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 			}
 
@@ -341,7 +360,21 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 	}
 
 	if event.Flags&EVENT_CHNG_STATE > 0 {
-		updateStateChange(event, sessionData)
+
+		switch event.NewRemoteState {
+		case STATE_ADMIN_DOWN:
+			sessionData.State = STATE_ADMIN_DOWN
+
+		case STATE_DOWN:
+			sessionData.State = STATE_DOWN
+
+		case STATE_INIT:
+			// nothing additional to do in this case, is taken care of in initSession
+
+		case STATE_UP:
+			sessionData.State = STATE_UP
+		}
+
 	}
 
 	if event.Flags&EVENT_CHNG_TIMING > 0 {
@@ -352,8 +385,9 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 
 }
 
-func updateStateChange(event PerfEvent, sessionData *Session) {
-
+func writeSession(sessionMap goebpf.Map, sessionData *Session) {
+	disc := sessionData.LocalDisc
+	sessionMap.Upsert(disc, sessionData.MarshalSession())
 }
 
 func (controller *SessionController) SendEvent(event PerfEvent) {

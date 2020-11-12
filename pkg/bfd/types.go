@@ -37,24 +37,46 @@ const (
 // Session describes a BFD session in userspace
 // and in the XDP map
 type Session struct {
-	Diagnostic BfdDiagnostic
 	State      BfdState
+	Diagnostic BfdDiagnostic
 
-	Flags       uint8
 	DetectMulti uint8
+	Flags       uint8
 
 	LocalDisc  uint32
 	RemoteDisc uint32
 	IpAddr     string
 
 	// rate in us of control packets local system -> remote system.
-	MinTx uint32
+	MinTx       uint32
+	RemoteMinRx uint32
 
 	// rate in us of control packets remote system -> local system.
-	MinRx uint32
+	MinRx       uint32
+	RemoteMinTx uint32
 
 	// rate in us of echo packets local system -> remote system.
-	MinEchoTx uint32
+	MinEchoTx    uint32
+	RemoteEchoRx uint32
+}
+
+// MarshalSession Convert a session into a valid session entry in the ebpf session map
+func (ses *Session) MarshalSession() []byte {
+	buf := bytes.NewBuffer([]uint8{})
+
+	binary.Write(buf, binary.LittleEndian, ses.State)
+	binary.Write(buf, binary.LittleEndian, ses.Diagnostic)
+	binary.Write(buf, binary.LittleEndian, ses.DetectMulti)
+	binary.Write(buf, binary.LittleEndian, ses.LocalDisc)
+	binary.Write(buf, binary.LittleEndian, ses.RemoteDisc)
+	binary.Write(buf, binary.LittleEndian, ses.MinTx)
+	binary.Write(buf, binary.LittleEndian, ses.RemoteMinTx)
+	binary.Write(buf, binary.LittleEndian, ses.MinRx)
+	binary.Write(buf, binary.LittleEndian, ses.RemoteMinRx)
+	binary.Write(buf, binary.LittleEndian, ses.MinEchoTx)
+	binary.Write(buf, binary.LittleEndian, ses.RemoteEchoRx)
+
+	return buf.Bytes()
 }
 
 type EchoPacket struct {

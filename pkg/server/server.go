@@ -37,6 +37,7 @@ type LocalDisc uint32
 
 type Server struct {
 	iface       string
+	config      ServerConfig
 	sessions    map[LocalDisc]*bfd.SessionController
 	subs        map[LocalDisc]chan bfd.SessionInfo
 	ipAddrs     map[string]LocalDisc
@@ -52,6 +53,7 @@ func New(config ServerConfig) (*Server, error) {
 	rand.Seed(int64(time.Now().Nanosecond()))
 
 	server := &Server{}
+	server.config = config
 	server.sessions = make(map[LocalDisc]*bfd.SessionController)
 	server.subs = make(map[LocalDisc]chan bfd.SessionInfo)
 	server.ipAddrs = make(map[string]LocalDisc)
@@ -61,17 +63,43 @@ func New(config ServerConfig) (*Server, error) {
 	bpf := loader.LoadNewBPF(config.Iface, "./xdp.elf", "xdp_prog")
 
 	sessionMap := bpf.Bpf.GetMapByName("session_map")
-	fmt.Println("Loaded %s", sessionMap.GetName())
+	fmt.Printf("Loaded %s\n", sessionMap.GetName())
 
 	// Set defaults in the program map:
 	programInfo := bpf.Bpf.GetMapByName("program_info")
 
-	programInfo.Insert(bfd.PROG_PORT, bfd.PROG_DEFAULT_PORT)
-	programInfo.Insert(bfd.PROG_IF_IDX, bpf.Iface)
-	programInfo.Insert(bfd.PROG_MIN_RX, bfd.PROG_DEFAULT_MIN_RX)
-	programInfo.Insert(bfd.PROG_MIN_TX, bfd.PROG_DEFAULT_MIN_TX)
-	programInfo.Insert(bfd.PROG_ECHO_RX, bfd.PROG_ECHO_RX)
-	programInfo.Insert(bfd.PROG_DETECT_MULTI, bfd.PROG_DETECT_MULTI)
+	if config.Port == 0 {
+		server.config.Port = bfd.PROG_DEFAULT_PORT
+	}
+
+	if config.MinRx == 0 {
+		server.config.MinRx = bfd.PROG_DEFAULT_MIN_RX
+	}
+
+	if config.MinTx == 0 {
+		server.config.MinTx = bfd.PROG_DEFAULT_MIN_TX
+	}
+
+	if config.EchoRx == 0 {
+		server.config.EchoRx = bfd.PROG_ECHO_RX
+	}
+
+	if config.DetectMulti == 0 {
+		server.config.DetectMulti = bfd.PROG_DETECT_MULTI
+	}
+
+	programInfo.Upsert(bfd.PROG_PORT, server.config.Port)
+	programInfo.Upsert(bfd.PROG_IF_IDX, bpf.Iface)
+	programInfo.Upsert(bfd.PROG_MIN_RX, server.config.MinRx)
+	programInfo.Upsert(bfd.PROG_MIN_TX, server.config.MinTx)
+	programInfo.Upsert(bfd.PROG_ECHO_RX, server.config.EchoRx)
+	programInfo.Upsert(bfd.PROG_DETECT_MULTI, server.config.DetectMulti)
+
+	port, err := programInfo.LookupInt(bfd.PROG_PORT)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("BFD Port: %d\n", port)
 
 	// === Perf event handling ===
 	perfmap := bpf.Bpf.GetMapByName("perfmap")
@@ -105,13 +133,13 @@ func New(config ServerConfig) (*Server, error) {
 				binary.Read(reader, binary.BigEndian, &event)
 				id := LocalDisc(event.LocalDisc)
 
-				fmt.Println("[%s] [%d] recieved perfevent", event.LocalDisc, time.Now().Format(time.StampMicro))
+				fmt.Printf("[%s] [%d] recieved perfevent\n", time.Now().Format(time.StampMicro), event.LocalDisc)
 
 				server.lock.Lock()
 				defer server.lock.Unlock()
 
 				if _, ok := server.sessions[id]; !ok {
-					fmt.Println("[%s] [%d] perfevent -> create new session", event.LocalDisc, time.Now().Format(time.StampMicro))
+					fmt.Printf("[%s] [%d] perfevent -> create new session\n", time.Now().Format(time.StampMicro), event.LocalDisc)
 
 					ipBytes := (*[4]byte)(unsafe.Pointer(&event.IpAddr))[:]
 					ip := net.IPv4(ipBytes[3], ipBytes[2], ipBytes[1], ipBytes[0])
@@ -134,7 +162,7 @@ func New(config ServerConfig) (*Server, error) {
 					id := LocalDisc(sessionInfo.LocalId)
 
 					ipAddr := server.sessions[id].SessionData.IpAddr
-					fmt.Println("[%s] server: [%s : %d] had an error, tearing down", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
+					fmt.Printf("[%s] server: [%s : %d] had an error, tearing down\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
 
 					// Delete the IpAddr -> LocalDisc
 					delete(server.ipAddrs, ipAddr)
@@ -263,8 +291,6 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 			return err
 		}
 	}
-
-	return nil
 }
 
 // func (self Server) StreamPerf(empt *pingpb.Empty, stream pingpb.Pinger_StreamPerfServer) error {
