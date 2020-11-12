@@ -147,7 +147,6 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 				}
 
 				// remove poll flag
-				sessionData.Flags &= (FLAG_POLL ^ 0xff)
 				writeSession(sessionMap, sessionData)
 
 				txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
@@ -155,7 +154,9 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 
 			} else if event.NewRemoteState == STATE_UP && sessionData.State == STATE_UP {
 				// waiting for other side
+				sessionData.Flags &= (FLAG_POLL ^ 0xff)
 				return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
+
 			} else {
 				fmt.Printf("[%d] on startSession got NewRemoteState: %d instead of %d\n", sessionData.LocalDisc, event.NewRemoteState, STATE_INIT)
 				// not sure what other events possible, but will be discarded
