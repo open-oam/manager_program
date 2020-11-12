@@ -59,7 +59,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 			switch sessionData.State {
 			case STATE_DOWN:
 				// Either on creation or link down, either way try sending BFD control packets
-				sesInfo := startSession(events, sessionData, sckt)
+				sesInfo := startSession(events, sessionData, sessionMap, sckt)
 				sessionInfo <- *sesInfo
 
 				if sesInfo.Error != nil {
@@ -102,7 +102,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	return &SessionController{id, sessionMap, sessionData, events} //, state, commands}
 }
 
-func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn) *SessionInfo {
+func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function streams control packets to start the handshake. It starts in state DOWN and
 	* will continuously send control packet until it recieves a perf event indicating a response,
@@ -131,13 +131,10 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
-			// TODO: Write the session data:
-			// writeSession(sessionMap, sessionData)
 			if event.NewRemoteState == STATE_INIT {
-
-				// TODO: Set bpfmap key values here:
 				sessionData.RemoteDisc = event.NewRemoteDisc
-				sessionData.RemoteMinRx = event.NewRemoteMinTx
+				sessionData.RemoteMinRx = event.NewRemoteMinRx
+				sessionData.RemoteMinTx = event.NewRemoteMinTx
 				sessionData.RemoteEchoRx = event.NewRemoteEchoRx
 
 				sessionData.State = STATE_UP
@@ -150,10 +147,12 @@ func startSession(events chan PerfEvent, sessionData *Session, sckt *net.UDPConn
 
 				// remove poll flag
 				sessionData.Flags &= (FLAG_POLL ^ 0xff)
+				writeSession(sessionMap, sessionData)
 
 				return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
 
 			} else {
+				fmt.Printf("[%d] on startSession got NewRemoteState: %d instead of %d\n", sessionData.LocalDisc, event.NewRemoteState, STATE_INIT)
 				// not sure what other events possible, but will be discarded
 			}
 
