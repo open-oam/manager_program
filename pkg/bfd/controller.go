@@ -253,7 +253,7 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 
 	dropCount := 0
 
-	fmt.Printf("[%s] [%s : %d] sending control packet\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+	fmt.Printf("[%s] [%s : %d] sending first async control packet\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 	_, err := sckt.Write(sessionData.MarshalControl())
 	if err != nil {
 		fmt.Println(err)
@@ -284,8 +284,8 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 			}
 
-		case txTimeOut := <-rxTimer.C:
-			fmt.Printf("[%s] [%s : %d] sending control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+		case txTimeOut := <-txTimer.C:
+			fmt.Printf("[%s] [%s : %d] sending continued async control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			_, err := sckt.Write(sessionData.MarshalControl())
 			if err != nil {
 				fmt.Println(err)
@@ -293,8 +293,8 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 
 			txTimer.Reset(time.Duration(timeOutTx) * time.Microsecond)
 		case rxTimeOut := <-rxTimer.C:
-
 			dropCount++
+
 			// Remote failed to send a packet quickly enough
 			if dropCount >= int(sessionData.DetectMulti) {
 				fmt.Printf("[%s] [%s : %d] remote down, [%d missed]\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, dropCount)
