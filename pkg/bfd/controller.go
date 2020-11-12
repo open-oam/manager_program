@@ -233,6 +233,7 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 
 	dropCount := 0
 
+	fmt.Printf("[%s] [%s : %d] sending control packet\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 	_, err := sckt.Write(sessionData.MarshalControl())
 	if err != nil {
 		fmt.Println(err)
@@ -246,11 +247,13 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 
 			// exit
 			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
+				// todo: possible closing handshake
 				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 
 			// recieved control packet reset timer
 			if event.Flags&EVENT_RX_CONTROL > 0 {
+				dropCount = 0
 				rxTimer.Reset(time.Duration(timeOutRx) * time.Microsecond)
 			}
 
@@ -271,11 +274,11 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 			txTimer.Reset(time.Duration(timeOutTx) * time.Microsecond)
 
 		case rxTimeOut := <-rxTimer.C:
-			fmt.Printf("[%s] [%s : %d] remote down\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 			dropCount++
 			// Remote failed to send a packet quickly enough
 			if dropCount >= int(sessionData.DetectMulti) {
+				fmt.Printf("[%s] [%s : %d] remote down, [%d missed]\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, dropCount)
 				sessionData.State = STATE_DOWN
 				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
 
@@ -313,11 +316,13 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sessionM
 
 			// exit
 			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
+				// todo: possible closing handshake
 				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown\n", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 
 			// Rest timer on echo reply
 			if event.Flags&EVENT_RX_ECHO > 0 {
+				dropCount = 0
 				echoTxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 			}
 

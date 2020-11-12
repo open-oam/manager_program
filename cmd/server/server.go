@@ -29,7 +29,7 @@ func main() {
 	minRx := flag.Uint("rx", 150000, "Min rx rate in µs.")
 	minTx := flag.Uint("tx", 150000, "Min Tx rat in µs.")
 	echoRx := flag.Uint("echo", 50000, "The echo packet send rate in µs.")
-	detectMulti := flag.Uint("multi", 1, "Number of timeouts before a session is down.")
+	detectMulti := flag.Uint("multi", 5, "Number of timeouts before a session is down.")
 
 	flag.Parse()
 	if *iface == "" {

@@ -111,7 +111,7 @@ func DefaultSession() Session {
 	session.MinRx = 150000    // Microseconds
 	session.MinTx = 150000    // Microseconds
 	session.MinEchoTx = 50000 // Microseconds
-	session.DetectMulti = 1
+	session.DetectMulti = 5
 	session.State = STATE_DOWN
 
 	return session
