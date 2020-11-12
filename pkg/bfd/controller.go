@@ -41,6 +41,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	controller.SessionData = sessionData
 
 	writeSession(sessionMap, sessionData)
+	fmt.Printf("[%s] [%s : %d] Creating sesion with localDisc: %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, id)
 
 	// Start listening for perf events
 	go func() {
@@ -146,7 +147,6 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 					fmt.Println(err)
 				}
 
-				// remove poll flag
 				writeSession(sessionMap, sessionData)
 
 				txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
@@ -154,6 +154,8 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 
 			} else if event.NewRemoteState == STATE_UP && sessionData.State == STATE_UP {
 				// waiting for other side
+
+				// remove poll flag
 				sessionData.Flags &= (FLAG_POLL ^ 0xff)
 				return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
 
@@ -183,11 +185,11 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 	 */
 	resTimer := time.NewTimer(time.Duration(RESPONSE_TIMEOUT) * time.Millisecond)
 
-	// Send first control packet
-	_, err := sckt.Write(sessionData.MarshalControl())
-	if err != nil {
-		fmt.Println(err)
-	}
+	// // Send first control packet
+	// _, err := sckt.Write(sessionData.MarshalControl())
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
 
 	for {
 		select {
