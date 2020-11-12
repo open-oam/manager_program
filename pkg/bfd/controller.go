@@ -132,6 +132,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 			fmt.Println(event)
 
 			if event.NewRemoteState == STATE_INIT {
+
 				sessionData.RemoteDisc = event.NewRemoteDisc
 				sessionData.RemoteMinRx = event.NewRemoteMinRx
 				sessionData.RemoteMinTx = event.NewRemoteMinTx
@@ -140,17 +141,21 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 				sessionData.State = STATE_UP
 
 				// must send final control packet for updated state
-				_, err := sckt.Write(sessionData.MarshalControl())
-				if err != nil {
-					fmt.Println(err)
-				}
+				// _, err := sckt.Write(sessionData.MarshalControl())
+				// if err != nil {
+				// 	fmt.Println(err)
+				// }
 
 				// remove poll flag
 				sessionData.Flags &= (FLAG_POLL ^ 0xff)
 				writeSession(sessionMap, sessionData)
 
-				return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
+				txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
+				//return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
 
+			} else if event.NewRemoteState == STATE_UP && sessionData.State == STATE_UP {
+				// waiting for other side
+				return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
 			} else {
 				fmt.Printf("[%d] on startSession got NewRemoteState: %d instead of %d\n", sessionData.LocalDisc, event.NewRemoteState, STATE_INIT)
 				// not sure what other events possible, but will be discarded
