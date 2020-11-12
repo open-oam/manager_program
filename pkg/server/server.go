@@ -130,7 +130,7 @@ func New(config ServerConfig) (*Server, error) {
 			select {
 			case eventData := <-perfEvents:
 				reader := bytes.NewReader(eventData)
-				binary.Read(reader, binary.BigEndian, &event)
+				binary.Read(reader, binary.LittleEndian, &event)
 				id := LocalDisc(event.LocalDisc)
 
 				fmt.Printf("[%s] [%d] recieved perfevent\n", time.Now().Format(time.StampMicro), event.LocalDisc)
