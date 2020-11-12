@@ -91,7 +91,7 @@ type EchoPacket struct {
 // BFD constants
 const (
 	VERSION          uint8  = 1
-	BFD_PORT         string = "3784"
+	BFD_PORT         int    = 3784
 	RESPONSE_TIMEOUT uint32 = 2000 // miliseconds
 )
 
@@ -108,6 +108,7 @@ const (
 func DefaultSession() Session {
 	session := Session{}
 
+	session.MinRx = 150000    // Microseconds
 	session.MinTx = 150000    // Microseconds
 	session.MinEchoTx = 50000 // Microseconds
 	session.DetectMulti = 1

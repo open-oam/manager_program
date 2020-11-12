@@ -3,6 +3,7 @@ package bfd
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/dropbox/goebpf"
@@ -45,8 +46,9 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	go func() {
 
 		// create socket
-		addr, err := net.ResolveUDPAddr("udp4", sessionData.IpAddr+":"+BFD_PORT)
-		sckt, err := net.DialUDP("udp4", nil, addr)
+		addr, err := net.ResolveUDPAddr("udp4", sessionData.IpAddr+":"+strconv.Itoa(BFD_PORT))
+		src_addr := net.UDPAddr{IP: nil, Port: BFD_PORT}
+		sckt, err := net.DialUDP("udp4", &src_addr, addr)
 		if err != nil {
 			fmt.Println(err)
 			return
