@@ -145,7 +145,7 @@ func New(config ServerConfig) (*Server, error) {
 					ip := net.IPv4(ipBytes[3], ipBytes[2], ipBytes[1], ipBytes[0])
 					ipAddr := ip.String()
 
-					controller := server.newSession(ipAddr, event.NewRemoteMinTx, event.NewRemoteMinRx, bfd.PROG_DEFAULT_ECHO_RX, true)
+					controller := server.newSession(&id, ipAddr, event.NewRemoteMinTx, event.NewRemoteMinRx, bfd.PROG_DEFAULT_ECHO_RX, true)
 					controller.Id = uint32(id)
 
 					server.sessions[id] = controller
@@ -184,11 +184,17 @@ func New(config ServerConfig) (*Server, error) {
 	return server, nil
 }
 
-func (server *Server) newSession(ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, isInit bool) *bfd.SessionController {
+func (server *Server) newSession(localDisc *LocalDisc, ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, isInit bool) *bfd.SessionController {
 
 	// Create a new session keys
-	key := newKey(server.sessions)
-	fmt.Printf("New Session: %d\n", key)
+	var key LocalDisc
+	if localDisc != nil {
+		key = *localDisc
+	} else {
+		key = newKey(server.sessions)
+	}
+
+	fmt.Printf("[%s] new session for %s: %d\n", time.Now().Format(time.StampMicro), ipAddr, uint32(key))
 
 	// Initialize the Session Data
 	sessionData := new(bfd.Session)
@@ -261,7 +267,7 @@ func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessio
 	server.lock.Lock()
 	defer server.lock.Unlock()
 
-	controller := server.newSession(req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, false) // req.DetectMulti, req.Mode
+	controller := server.newSession(nil, req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, false) // req.DetectMulti, req.Mode
 	key := LocalDisc(controller.Id)
 	server.sessions[key] = controller
 	server.ipAddrs[req.IPAddr] = key
