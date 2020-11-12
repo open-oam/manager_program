@@ -136,10 +136,10 @@ func New(config ServerConfig) (*Server, error) {
 				fmt.Printf("[%s] [%d] recieved perfevent in server routine.\n", time.Now().Format(time.StampMicro), event.LocalDisc)
 				fmt.Println(event)
 
-				server.lock.Lock()
-				defer server.lock.Unlock()
-
 				if _, ok := server.sessions[id]; !ok {
+					server.lock.Lock()
+					defer server.lock.Unlock()
+
 					fmt.Printf("[%s] [%d] perfevent -> create new session\n", time.Now().Format(time.StampMicro), event.LocalDisc)
 
 					ipBytes := (*[4]byte)(unsafe.Pointer(&event.IpAddr))[:]
@@ -155,6 +155,8 @@ func New(config ServerConfig) (*Server, error) {
 
 				session := server.sessions[id]
 				session.SendEvent(event)
+				fmt.Printf("[%s] [%d] Sent event to session routine.\n", time.Now().Format(time.StampMicro), event.LocalDisc)
+
 			case sessionInfo := <-server.sessionInfo:
 				if sessionInfo.Error != nil {
 					server.lock.Lock()
