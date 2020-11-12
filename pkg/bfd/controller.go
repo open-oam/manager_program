@@ -141,10 +141,10 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 				sessionData.State = STATE_UP
 
 				// must send final control packet for updated state
-				// _, err := sckt.Write(sessionData.MarshalControl())
-				// if err != nil {
-				// 	fmt.Println(err)
-				// }
+				_, err := sckt.Write(sessionData.MarshalControl())
+				if err != nil {
+					fmt.Println(err)
+				}
 
 				// remove poll flag
 				sessionData.Flags &= (FLAG_POLL ^ 0xff)
