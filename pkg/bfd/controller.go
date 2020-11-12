@@ -129,7 +129,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 	for {
 		select {
 		case event := <-events:
-			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] recieved perfevent session routine.\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
 			if event.NewRemoteState == STATE_INIT {

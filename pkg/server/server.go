@@ -133,7 +133,8 @@ func New(config ServerConfig) (*Server, error) {
 				binary.Read(reader, binary.LittleEndian, &event)
 				id := LocalDisc(event.LocalDisc)
 
-				fmt.Printf("[%s] [%d] recieved perfevent\n", time.Now().Format(time.StampMicro), event.LocalDisc)
+				fmt.Printf("[%s] [%d] recieved perfevent in server routine.\n", time.Now().Format(time.StampMicro), event.LocalDisc)
+				fmt.Println(event)
 
 				server.lock.Lock()
 				defer server.lock.Unlock()
