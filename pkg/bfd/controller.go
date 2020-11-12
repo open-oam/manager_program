@@ -142,6 +142,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 				sessionData.State = STATE_UP
 
 				// must send final control packet for updated state
+				fmt.Printf("[%s] [%s : %d] Sending state UP control packet\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 				_, err := sckt.Write(sessionData.MarshalControl())
 				if err != nil {
 					fmt.Println(err)
@@ -165,7 +166,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 			}
 
 		case txTimeOut := <-txTimer.C:
-			fmt.Printf("[%s] [%s : %d] sending control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] sending initial DOWN control packet\n", txTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 			// timeout send another control packet
 			_, err := sckt.Write(sessionData.MarshalControl())
@@ -181,7 +182,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function is on the passive side of handshake and will basically wait for perf event
-	* indicating state chang to UP
+	* indicating state change to UP
 	 */
 	resTimer := time.NewTimer(time.Duration(RESPONSE_TIMEOUT) * time.Millisecond)
 
@@ -198,6 +199,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 			fmt.Println(event)
 
 			if event.NewRemoteState == STATE_UP {
+				fmt.Printf("[%s] [%s : %d] Server side recieved final remote state UP response, moving to async.\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 
 				// update own state, must do here not in updateSessionChange because
 				// it is the first time seeing these and change flags may not be set
@@ -223,7 +225,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 			}
 
 		case resTimeOut := <-resTimer.C:
-			fmt.Printf("[%s] [%s : %d] Client handshake timed out\n", resTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] Server handshake timed out waiting for client response\n", resTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			return &SessionInfo{sessionData.LocalDisc, STATE_INIT, fmt.Errorf("[%s : %d] remote timed out", sessionData.IpAddr, sessionData.LocalDisc)}
 		}
 	}
@@ -412,7 +414,11 @@ func writeSession(sessionMap goebpf.Map, sessionData *Session) {
 	disc := sessionData.LocalDisc
 	fmt.Printf("[%s] [%s : %d] Writing to session map with key: %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, disc)
 
-	sessionMap.Upsert(disc, sessionData.MarshalSession())
+	err := sessionMap.Upsert(disc, sessionData.MarshalSession())
+	if err != nil {
+		fmt.Printf("[%s] [%s : %d] Failed to write to map.\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+		fmt.Println(err)
+	}
 }
 
 func (controller *SessionController) SendEvent(event PerfEvent) {
