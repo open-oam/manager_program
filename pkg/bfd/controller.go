@@ -272,7 +272,7 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 			}
 
 			// recieved control packet reset timer
-			if event.Flags&EVENT_RX_CONTROL > 0 {
+			if event.Flags&1 == EVENT_RX_CONTROL {
 				dropCount = 0
 				rxTimer.Reset(time.Duration(timeOutRx) * time.Microsecond)
 			}
