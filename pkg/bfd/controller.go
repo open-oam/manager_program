@@ -41,15 +41,15 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	controller.SessionData = sessionData
 
 	writeSession(sessionMap, sessionData)
-	fmt.Printf("[%s] [%s : %d] Creating sesion with localDisc: %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, id)
+	fmt.Printf("[%s] [%s : %d] Creating session with localDisc: %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, id)
 
 	// Start listening for perf events
 	go func() {
 
 		// create socket
 		addr, err := net.ResolveUDPAddr("udp4", sessionData.IpAddr+":"+strconv.Itoa(BFD_PORT))
-		src_addr := net.UDPAddr{IP: nil, Port: BFD_PORT}
-		sckt, err := net.DialUDP("udp4", &src_addr, addr)
+		srcAddr := net.UDPAddr{IP: nil, Port: BFD_PORT}
+		sckt, err := net.DialUDP("udp4", &srcAddr, addr)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -207,14 +207,23 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 				sessionData.State = STATE_UP
 				writeSession(sessionMap, sessionData)
 
+				// // must send final control packet for updated state
+				// sessionData.Flags |= FLAG_POLL
+				// _, err := sckt.Write(sessionData.MarshalControl())
+				// if err != nil {
+				// 	fmt.Println(err)
+				// }
+				// sessionData.Flags &= (FLAG_POLL ^ 0xff)
+
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 
 			} else {
+				fmt.Printf("[%d] on initSession got NewRemoteState: %d instead of %d\n", sessionData.LocalDisc, event.NewRemoteState, STATE_UP)
 				// In INIT state no other event is valid, drop it and wait for correct event
 			}
 
 		case resTimeOut := <-resTimer.C:
-			fmt.Printf("[%s] [%s : %d] remote timed out\n", resTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			fmt.Printf("[%s] [%s : %d] Client handshake timed out\n", resTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			return &SessionInfo{sessionData.LocalDisc, STATE_INIT, fmt.Errorf("[%s : %d] remote timed out", sessionData.IpAddr, sessionData.LocalDisc)}
 		}
 	}
@@ -401,6 +410,8 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 
 func writeSession(sessionMap goebpf.Map, sessionData *Session) {
 	disc := sessionData.LocalDisc
+	fmt.Printf("[%s] [%s : %d] Writing to session map with key: %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, disc)
+
 	sessionMap.Upsert(disc, sessionData.MarshalSession())
 }
 
