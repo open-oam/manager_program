@@ -292,7 +292,6 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 			}
 
 			txTimer.Reset(time.Duration(timeOutTx) * time.Microsecond)
-
 		case rxTimeOut := <-rxTimer.C:
 
 			dropCount++
@@ -301,8 +300,9 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 				fmt.Printf("[%s] [%s : %d] remote down, [%d missed]\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, dropCount)
 				sessionData.State = STATE_DOWN
 				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
-
 			}
+
+			rxTimer.Reset(time.Duration(timeOutRx) * time.Microsecond)
 		}
 	}
 }
@@ -371,6 +371,8 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sessionM
 				sessionData.State = STATE_DOWN
 				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
+
+			echoRxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 		}
 	}
 }
