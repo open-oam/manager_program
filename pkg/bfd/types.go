@@ -147,6 +147,31 @@ type PerfEvent struct {
 }
 
 const (
+	CHANGE_TIME  uint8 = 0
+	CHANGE_MODE  uint8 = 1
+	CHANGE_MULTI uint8 = 2
+)
+
+const (
+	ASYNC  uint32 = 0
+	DEMAND uint32 = 1
+)
+
+type CommandEvent struct {
+	Type uint8       // = ChangeMode
+	Data interface{} // uint32
+	// todo
+	// timing change
+	// toggle demand mode
+	// detect multi
+	//
+}
+
+func NewCommandEvent(Type uint8, Data interface{}) CommandEvent {
+	return CommandEvent{Type, Data}
+}
+
+const (
 	// ProgKeyPort Port that the BFD Program listens on
 	PROG_PORT uint32 = 1
 

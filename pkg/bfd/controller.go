@@ -21,6 +21,8 @@ type SessionController struct {
 	sessionMap  goebpf.Map
 	SessionData *Session
 	events      chan PerfEvent
+	command     chan CommandEvent
+
 	// state       chan StateUpdate
 	// commands    chan Command
 	// lock       *sync.Mutex
@@ -32,6 +34,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 
 	sessionMap := (*bpf).GetMapByName("session_map")
 	events := make(chan PerfEvent)
+	commands := make(chan CommandEvent)
 
 	sessionData.LocalDisc = id
 	controller.Id = id
@@ -81,9 +84,9 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 				var sesInfo *SessionInfo
 
 				if sessionData.Flags&FLAG_DEMAND > 0 {
-					sesInfo = maintainSessionDemand(events, sessionData, sessionMap, sckt)
+					sesInfo = maintainSessionDemand(events, commands, sessionData, sessionMap, sckt)
 				} else {
-					sesInfo = maintainSessionAsync(events, sessionData, sessionMap, sckt)
+					sesInfo = maintainSessionAsync(events, commands, sessionData, sessionMap, sckt)
 				}
 
 				sessionInfo <- *sesInfo
@@ -100,7 +103,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 		}
 	}()
 
-	return &SessionController{id, sessionMap, sessionData, events} //, state, commands}
+	return &SessionController{id, sessionMap, sessionData, events, commands} //, state, commands}
 }
 
 func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
@@ -232,7 +235,7 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 	}
 }
 
-func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
+func maintainSessionAsync(events chan PerfEvent, commands chan CommandEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function will send control packets on timeouts to maintain a session in async mode.
 	 */
@@ -261,6 +264,11 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 
 	for {
 		select {
+		case command := <-commands:
+			fmt.Printf("[%s] [%s : %d] recieved command event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			handleCommand(command, sessionData)
+			return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
+
 		case event := <-events:
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
@@ -307,7 +315,7 @@ func maintainSessionAsync(events chan PerfEvent, sessionData *Session, sessionMa
 	}
 }
 
-func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
+func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
 	* This function will send echos on timeouts and ensure recieveing echos on time outs until state change.
 	* TODO: Funcitonality would need to be added for asymmetric echos.
@@ -330,6 +338,12 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sessionM
 
 	for {
 		select {
+		case command := <-commands:
+
+			fmt.Printf("[%s] [%s : %d] recieved command event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+			handleCommand(command, sessionData)
+			return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
+
 		case event := <-events:
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
@@ -377,6 +391,19 @@ func maintainSessionDemand(events chan PerfEvent, sessionData *Session, sessionM
 	}
 }
 
+func handleCommand(command CommandEvent, sessionData *Session) {
+
+	switch command.Type {
+	case CHANGE_MODE:
+
+	case CHANGE_TIME:
+
+	case CHANGE_MULTI:
+
+	}
+
+}
+
 func updateSessionChange(event PerfEvent, sessionData *Session) {
 
 	if event.Flags&EVENT_CHNG_DISC > 0 {
@@ -409,6 +436,10 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 		sessionData.MinTx = event.NewRemoteMinRx
 		sessionData.MinRx = event.NewRemoteMinTx
 		sessionData.MinEchoTx = event.NewRemoteEchoRx
+	}
+
+	if event.Flags&EVENT_CHNG_DEMAND > 0 {
+		sessionData.Flags |= FLAG_DEMAND
 	}
 
 }
