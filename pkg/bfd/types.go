@@ -147,14 +147,17 @@ type PerfEvent struct {
 }
 
 const (
-	CHANGE_TIME  uint8 = 0
-	CHANGE_MODE  uint8 = 1
-	CHANGE_MULTI uint8 = 2
+	CHANGE_TIME_RX   uint8 = 0
+	CHANGE_TIME_TX   uint8 = 1
+	CHANGE_TIME_ECHO uint8 = 2
+	CHANGE_MODE      uint8 = 3
+	CHANGE_MULTI     uint8 = 4
+	SHUTDOWN         uint8 = 5
 )
 
 const (
-	ASYNC  uint32 = 0
-	DEMAND uint32 = 1
+	ASYNC  int32 = 0
+	DEMAND int32 = 1
 )
 
 type CommandEvent struct {

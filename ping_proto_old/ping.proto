@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+option go_package = "github.com/open-oam/manager_program/proto/ping";
+
+// message Empty {}
+
+// message PerfMessage {
+//   uint32 Id = 1;
+//   uint32 Seq = 2;
+//   uint32 OrigTime = 3;
+//   uint64 RecvTime = 4;
+//   uint32 SrcIP = 5;
+// }
+
+// message LoadEbpfRequest {
+//   string Interface = 1;
+//   string File = 2;
+//   string Program = 3;
+//   string PerfMap = 4;
+// }
+// message LoadEbpfResponse {}
+
+// message UnloadEbpfRequest {}
+// message UnloadEbpfResponse {}
+
+// // message StreamPerf { bool start = 1; }
+// enum PerfStreamType { START = 0; STOP = 1; }
+
+// message PerfRequest { PerfStreamType type = 1; }
+
+// service Pinger {
+//   rpc LoadEbpf(LoadEbpfRequest) returns(Empty) {}
+//   rpc UnloadEbpf(Empty) returns(Empty) {}
+//   rpc StreamPerf(Empty) returns(stream PerfMessage) {}
+// }

@@ -1,6 +1,7 @@
 syntax = "proto3";
+package bfd.v1;
 
-option go_package = "github.com/open-oam/manager_program/proto/bfd";
+option go_package = "github.com/open-oam/manager_program/gen/bfd";
 
 message Empty {}
 
@@ -30,11 +31,17 @@ enum Mode {
 
 message ChangeModeRequest { 
   uint32 LocalId = 1; 
-  Mode mode = 2;
+  Mode Mode = 2;
 }
+
+// message ChangeTimingRequest {
+//   uint32 NewRxTime = 1;
+//   // etc ...
+// }
 
 service BFD {
   rpc CreateSession(CreateSessionRequest) returns(CreateSessionResponse);
   rpc SessionState(SessionStateRequest) returns(stream SessionInfo);
   rpc ChangeMode(ChangeModeRequest) returns(Empty);
+  // rpc ChangeTiming(ChangeTimingRequest) returns(Empty);
 }

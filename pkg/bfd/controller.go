@@ -9,12 +9,6 @@ import (
 	"github.com/dropbox/goebpf"
 )
 
-/*
-TODO:
-	- diagnostics
-	- closing handshake
-*/
-
 // SessionController Controls a running BFD session
 type SessionController struct {
 	Id          uint32
@@ -22,10 +16,6 @@ type SessionController struct {
 	SessionData *Session
 	events      chan PerfEvent
 	command     chan CommandEvent
-
-	// state       chan StateUpdate
-	// commands    chan Command
-	// lock       *sync.Mutex
 }
 
 // NewController Create a new controller from the given bpf System
@@ -255,6 +245,7 @@ func maintainSessionAsync(events chan PerfEvent, commands chan CommandEvent, ses
 	rxTimer := time.NewTimer(time.Duration(timeOutRx) * time.Microsecond)
 
 	dropCount := 0
+	expectFinal := false
 
 	fmt.Printf("[%s] [%s : %d] sending first async control packet\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 	_, err := sckt.Write(sessionData.MarshalControl())
@@ -266,17 +257,21 @@ func maintainSessionAsync(events chan PerfEvent, commands chan CommandEvent, ses
 		select {
 		case command := <-commands:
 			fmt.Printf("[%s] [%s : %d] recieved command event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
-			handleCommand(command, sessionData)
-			return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
+			expectFinal = handleCommand(command, sessionData, sckt)
 
 		case event := <-events:
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
+			// check if waiting on final packet to change mode
+			if expectFinal && event.Flags&EVENT_RX_FINAL > 0 {
+				writeSession(sessionMap, sessionData)
+				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
+			}
+
 			// exit
 			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
-				// todo: possible closing handshake
-				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown", sessionData.IpAddr, sessionData.LocalDisc)}
+				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, nil}
 			}
 
 			// recieved control packet reset timer
@@ -330,6 +325,7 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 	echoRxTimer := time.NewTimer(time.Duration(echoTimeOut) * time.Microsecond)
 
 	dropCount := 0
+	expectFinal := false
 
 	_, err := sckt.Write(sessionData.MarshalEcho())
 	if err != nil {
@@ -341,17 +337,21 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 		case command := <-commands:
 
 			fmt.Printf("[%s] [%s : %d] recieved command event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
-			handleCommand(command, sessionData)
-			return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
+			expectFinal = handleCommand(command, sessionData, sckt)
 
 		case event := <-events:
 			fmt.Printf("[%s] [%s : %d] recieved perf event\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
 			fmt.Println(event)
 
+			// check if waiting on final packet to change mode or timing
+			if expectFinal && event.Flags&EVENT_RX_FINAL > 0 {
+				writeSession(sessionMap, sessionData)
+				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
+			}
+
 			// exit
 			if event.Flags&EVENT_TEARDOWN_SESSION > 0 {
-				// todo: possible closing handshake
-				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, fmt.Errorf("[%s : %d] recieved teardown\n", sessionData.IpAddr, sessionData.LocalDisc)}
+				return &SessionInfo{sessionData.LocalDisc, STATE_ADMIN_DOWN, nil}
 			}
 
 			// Rest timer on echo reply
@@ -360,7 +360,7 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 				echoTxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)
 			}
 
-			// update anthing else
+			// update anthing elsess
 			if event.Flags&0xf0 > 0 {
 				updateSessionChange(event, sessionData)
 				writeSession(sessionMap, sessionData)
@@ -391,17 +391,49 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 	}
 }
 
-func handleCommand(command CommandEvent, sessionData *Session) {
+func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn) bool {
 
 	switch command.Type {
+	case SHUTDOWN:
+		// add poll flag
+		sessionData.Flags |= FLAG_POLL
+
+		// change state
+		sessionData.State = STATE_ADMIN_DOWN
+
 	case CHANGE_MODE:
 
-	case CHANGE_TIME:
+		// todo: ensure toggle is correct
+		if sessionData.Flags&FLAG_DEMAND > 0 {
+
+		}
+
+		// toggle mode
+		sessionData.Flags ^= FLAG_DEMAND
+
+	case CHANGE_TIME_RX:
+		sessionData.MinRx = command.Data.(uint32)
+
+	case CHANGE_TIME_TX:
+		sessionData.MinTx = command.Data.(uint32)
+
+	case CHANGE_TIME_ECHO:
+		sessionData.MinEchoTx = command.Data.(uint32)
 
 	case CHANGE_MULTI:
-
+		// Multi is only onh our side and doesnt need to be updated over session
+		sessionData.DetectMulti = command.Data.(uint8)
+		return false
 	}
 
+	// send control packet
+	_, err := sckt.Write(sessionData.MarshalControl())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// return expecting Final packet
+	return true
 }
 
 func updateSessionChange(event PerfEvent, sessionData *Session) {
@@ -457,6 +489,10 @@ func writeSession(sessionMap goebpf.Map, sessionData *Session) {
 
 func (controller *SessionController) SendEvent(event PerfEvent) {
 	controller.events <- event
+}
+
+func (controller *SessionController) SendCommand(command CommandEvent) {
+	controller.command <- command
 }
 
 // type StateUpdate int

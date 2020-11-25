@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/open-oam/manager_program/pkg/server"
-	bfdpb "github.com/open-oam/manager_program/proto/bfd"
+	bfdpb "github.com/open-oam/manager_program/gen/bfd"
 	"google.golang.org/grpc"
 )
 

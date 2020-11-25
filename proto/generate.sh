@@ -9,5 +9,5 @@ for dir in $(find ${DIR} -name '*.proto' -print0 | xargs -0 -n1 dirname | sort |
   files=$(find "${dir}" -name '*.proto')
 
   # Generate all files with protoc-gen-go.
-  protoc -I ${DIR} --go-grpc_out=paths=source_relative:${DIR} ${files}  # --go_out=plugins=grpc,paths=source_relative:${DIR} ${files}
+  protoc -I ${DIR} --go_opt=paths=source_relative:${DIR} --go-grpc_out=${files} --go-grpc_opt=paths=source_relative  # --go_out=plugins=grpc,paths=source_relative:${DIR} ${files}
 done

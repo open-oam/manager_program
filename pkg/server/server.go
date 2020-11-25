@@ -12,9 +12,9 @@ import (
 	"unsafe"
 
 	"github.com/dropbox/goebpf"
+	bfdpb "github.com/open-oam/manager_program/gen/bfd"
 	"github.com/open-oam/manager_program/internal/loader"
 	"github.com/open-oam/manager_program/pkg/bfd"
-	bfdpb "github.com/open-oam/manager_program/proto/bfd"
 )
 
 // #define PROGKEY_PORT 1
@@ -154,15 +154,19 @@ func New(config ServerConfig) (*Server, error) {
 				session.SendEvent(event)
 
 			case sessionInfo := <-server.sessionInfo:
-				if sessionInfo.Error != nil {
+				if sessionInfo.Error != nil || sessionInfo.State == bfd.STATE_ADMIN_DOWN {
 					server.lock.Lock()
 					defer server.lock.Unlock()
 
 					id := LocalDisc(sessionInfo.LocalId)
-
 					ipAddr := server.sessions[id].SessionData.IpAddr
-					fmt.Printf("[%s] server: [%s : %d] had an error, tearing down\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
-					fmt.Printf("[%s] server error: [%s : %d] %s\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId, sessionInfo.Error.Error())
+
+					if sessionInfo.Error != nil {
+						fmt.Printf("[%s] server: [%s : %d] had an error, tearing down\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
+						fmt.Printf("[%s] server error: [%s : %d] %s\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId, sessionInfo.Error.Error())
+					} else {
+						fmt.Printf("[%s] server: [%s : %d] Change to Admin Down... tearing down\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
+					}
 
 					// Delete the IpAddr -> LocalDisc
 					delete(server.ipAddrs, ipAddr)
@@ -298,6 +302,27 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 		}
 	}
 }
+
+func (server *Server) ChangeMode(ctx context.Context, req *bfdpb.ChangeModeRequest) (*bfdpb.Empty, error) {
+	localId := LocalDisc(req.LocalId)
+	mode := req.Mode
+
+	server.lock.Lock()
+
+	session, ok := server.sessions[localId]
+	if !ok {
+		return nil, fmt.Errorf("Unkown LocalId: %d", uint32(localId))
+	}
+
+	server.lock.Unlock()
+
+	command := bfd.CommandEvent{Type: bfd.CHANGE_MODE, Data: mode}
+	session.SendCommand(command)
+
+	return &bfdpb.Empty{}, nil
+}
+
+// func (server *Server) mustEmbedUnimplementedBFDServer() {}
 
 // func (self Server) StreamPerf(empt *pingpb.Empty, stream pingpb.Pinger_StreamPerfServer) error {
 // 	fmt.Println("Streaming Perf Events")
