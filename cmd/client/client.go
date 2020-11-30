@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 
-	bfdpb "github.com/open-oam/manager_program/proto/bfd"
+	bfdpb "github.com/open-oam/manager_program/gen/proto/bfd"
 	"google.golang.org/grpc"
 )
 
@@ -19,17 +19,10 @@ import (
 var remote = flag.String("remote", "", "Remote server to create session with")
 var stream = flag.Bool("stream", false, "Stream events for the given session")
 var mode = flag.String("mode", "", "Change the mode of a remote server")
+var id = flag.Uint("disc", 0, "The local discriminator of the session")
 
 func main() {
 	flag.Parse()
-	if *remote == "" {
-		panic("-remote is required.")
-	}
-
-	ip := net.ParseIP(*remote)
-	if ip == nil || ip.To4() == nil {
-		panic("-remote must be a valid IPv4 address in dot notation")
-	}
 
 	fmt.Println("Connecting to server")
 	opts := []grpc.DialOption{grpc.WithInsecure()}
@@ -42,7 +35,16 @@ func main() {
 
 	client := bfdpb.NewBFDClient(conn)
 
-	if !*stream {
+	if !*stream && *mode == "" {
+		if *remote == "" {
+			panic("-remote is required.")
+		}
+
+		ip := net.ParseIP(*remote)
+		if ip == nil || ip.To4() == nil {
+			panic("-remote must be a valid IPv4 address in dot notation")
+		}
+
 		req := &bfdpb.CreateSessionRequest{IPAddr: ip.String()}
 		resp, err := client.CreateSession(context.Background(), req)
 		if err != nil {
@@ -50,9 +52,19 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Printf("Successfully started session with %s\n", resp.IPAddr)
-	} else if *mode != "" {
-		req := &bfdpb.SessionStateRequest{IPAddr: ip.String()}
+		fmt.Printf("Started session with: %s\n", *remote)
+		fmt.Printf("Session ID: %d\n", resp.GetLocalId())
+	} else if *mode == "" {
+		if *remote == "" {
+			panic("-remote is required.")
+		}
+
+		ip := net.ParseIP(*remote)
+		if ip == nil || ip.To4() == nil {
+			panic("-remote must be a valid IPv4 address in dot notation")
+		}
+
+		req := &bfdpb.SessionStateRequest{LocalId: uint32(*id)}
 		infoEvents, err := client.SessionState(context.Background(), req)
 		if err != nil {
 			d := fmt.Sprintf("Unable to create session for %s", ip.String())
@@ -67,21 +79,14 @@ func main() {
 			fmt.Println(info)
 		}
 	} else {
-		fmt.Println("Mode changing not yet implemented. Use grpcurl");
-		// req := &bfdpb.ChangeModeRequest{IPAddr: ip.String()}
-		// infoEvents, err := client.SessionState(context.Background(), req)
-		// if err != nil {
-		// 	d := fmt.Sprintf("Unable to create session for %s", ip.String())
-		// 	panic(d)
-		// }
+		changeMode := bfdpb.Mode_value[*mode]
+		req := &bfdpb.ChangeModeRequest{LocalId: uint32(*id), Mode: bfdpb.Mode(changeMode)}
+		_, err = client.ChangeMode(context.Background(), req)
+		if err != nil {
+			panic(err)
+		}
 
-		// for {
-		// 	info, err := infoEvents.Recv()
-		// 	if err != nil {
-		// 		panic(err)
-		// 	}
-		// 	fmt.Println(info)
-		// }
+		fmt.Printf("Successfully changed modes to: %s\n", *mode)
 	}
 
 	// client.

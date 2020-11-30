@@ -12,7 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/dropbox/goebpf"
-	bfdpb "github.com/open-oam/manager_program/gen/bfd"
+	bfdpb "github.com/open-oam/manager_program/gen/proto/bfd"
 	"github.com/open-oam/manager_program/internal/loader"
 	"github.com/open-oam/manager_program/pkg/bfd"
 )
@@ -36,11 +36,11 @@ type ServerConfig struct {
 type LocalDisc uint32
 
 type Server struct {
-	iface       string
-	config      ServerConfig
-	sessions    map[LocalDisc]*bfd.SessionController
-	subs        map[LocalDisc]chan bfd.SessionInfo
-	ipAddrs     map[string]LocalDisc
+	iface    string
+	config   ServerConfig
+	sessions map[LocalDisc]*bfd.SessionController
+	subs     map[LocalDisc]chan bfd.SessionInfo
+	// ipAddrs     map[string]LocalDisc
 	sessionInfo chan bfd.SessionInfo
 	lock        *sync.Mutex
 	Bpf         *loader.BpfInfo
@@ -56,7 +56,7 @@ func New(config ServerConfig) (*Server, error) {
 	server.config = config
 	server.sessions = make(map[LocalDisc]*bfd.SessionController)
 	server.subs = make(map[LocalDisc]chan bfd.SessionInfo)
-	server.ipAddrs = make(map[string]LocalDisc)
+	// server.ipAddrs = make(map[string]LocalDisc)
 	server.sessionInfo = make(chan bfd.SessionInfo)
 	server.lock = new(sync.Mutex)
 
@@ -147,7 +147,7 @@ func New(config ServerConfig) (*Server, error) {
 					controller.Id = uint32(id)
 
 					server.sessions[id] = controller
-					server.ipAddrs[ipAddr] = id
+					// server.ipAddrs[ipAddr] = id
 				}
 
 				session := server.sessions[id]
@@ -169,7 +169,7 @@ func New(config ServerConfig) (*Server, error) {
 					}
 
 					// Delete the IpAddr -> LocalDisc
-					delete(server.ipAddrs, ipAddr)
+					// delete(server.ipAddrs, ipAddr)
 
 					// Delete the session
 					delete(server.sessions, id)
@@ -242,14 +242,14 @@ func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
 	}
 }
 
-func (server *Server) createSub(ipAddr string) (<-chan bfd.SessionInfo, error) {
+func (server *Server) createSub(id LocalDisc) (<-chan bfd.SessionInfo, error) {
 	server.lock.Lock()
 	defer server.lock.Unlock()
 
-	id, ok := server.ipAddrs[ipAddr]
-	if !ok {
-		return nil, fmt.Errorf("IPAddr not found: %s", ipAddr)
-	}
+	// id, ok := server.ipAddrs[ipAddr]
+	// if !ok {
+	// 	return nil, fmt.Errorf("IPAddr not found: %s", ipAddr)
+	// }
 
 	c := make(chan bfd.SessionInfo)
 	server.subs[id] = c
@@ -257,11 +257,11 @@ func (server *Server) createSub(ipAddr string) (<-chan bfd.SessionInfo, error) {
 	return c, nil
 }
 
-func (server *Server) removeSub(ipAddr string) {
+func (server *Server) removeSub(id LocalDisc) {
 	server.lock.Lock()
 	defer server.lock.Unlock()
 
-	id := server.ipAddrs[ipAddr]
+	// id := server.ipAddrs[ipAddr]
 	delete(server.subs, id)
 }
 
@@ -274,25 +274,26 @@ func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessio
 	controller := server.newSession(nil, req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, false) // req.DetectMulti, req.Mode
 	key := LocalDisc(controller.Id)
 	server.sessions[key] = controller
-	server.ipAddrs[req.IPAddr] = key
+	// server.ipAddrs[req.IPAddr] = key
 
-	return &bfdpb.CreateSessionResponse{IPAddr: req.IPAddr}, nil
+	return &bfdpb.CreateSessionResponse{LocalId: uint32(key)}, nil
 }
 
 func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD_SessionStateServer) error {
-	ipAddr := req.IPAddr
+	// ipAddr := req.IPAddr
+	id := LocalDisc(req.GetLocalId())
 
-	infoEvents, err := server.createSub(ipAddr)
+	infoEvents, err := server.createSub(id)
 	if err != nil {
 		return err
 	}
-	defer server.removeSub(ipAddr)
+	defer server.removeSub(id)
 
 	for {
 		info := <-infoEvents
 
 		respInfo := &bfdpb.SessionInfo{}
-		respInfo.IpAddr = ipAddr
+		respInfo.LocalId = info.LocalId
 		respInfo.State = uint32(info.State)
 		respInfo.Error = info.Error.Error()
 
@@ -311,7 +312,7 @@ func (server *Server) ChangeMode(ctx context.Context, req *bfdpb.ChangeModeReque
 
 	session, ok := server.sessions[localId]
 	if !ok {
-		return nil, fmt.Errorf("Unkown LocalId: %d", uint32(localId))
+		return nil, fmt.Errorf("Unknown LocalId: %d", uint32(localId))
 	}
 
 	server.lock.Unlock()
