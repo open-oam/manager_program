@@ -90,6 +90,8 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 				return
 			}
 
+			fmt.Printf("[%s] [%s : %d] Session state %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, sessionData.State)
+
 		}
 	}()
 
@@ -392,17 +394,19 @@ func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn
 
 	switch command.Type {
 	case SHUTDOWN:
-		// add poll flag
-		sessionData.Flags |= FLAG_POLL
 
 		// change state
 		sessionData.State = STATE_ADMIN_DOWN
 
 	case CHANGE_MODE:
 
-		// todo: ensure toggle is correct
-		if sessionData.Flags&FLAG_DEMAND > 0 {
+		// ensure valid toggle
+		if sessionData.Flags&FLAG_DEMAND > 0 && command.Data.(uint32) == DEMAND {
+			return false
+		}
 
+		if sessionData.Flags&FLAG_DEMAND == 0 && command.Data.(uint32) == ASYNC {
+			return false
 		}
 
 		// toggle mode
@@ -423,11 +427,18 @@ func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn
 		return false
 	}
 
+	// add poll flag
+	sessionData.Flags |= FLAG_POLL
+
 	// send control packet
+	fmt.Printf("[%s] [%s : %d] Sending control packet on command event.\n", sessionData.IpAddr, sessionData.LocalDisc)
 	_, err := sckt.Write(sessionData.MarshalControl())
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	// remove poll flag
+	sessionData.Flags &= (FLAG_POLL ^ 0xff)
 
 	// return expecting Final packet
 	return true
