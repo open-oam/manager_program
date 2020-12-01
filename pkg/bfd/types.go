@@ -171,8 +171,8 @@ const (
 )
 
 const (
-	ASYNC  uint32 = 0
-	DEMAND uint32 = 1
+	DEMAND uint32 = 0
+	ASYNC  uint32 = 1
 )
 
 type CommandEvent struct {
