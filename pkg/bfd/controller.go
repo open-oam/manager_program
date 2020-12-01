@@ -398,6 +398,9 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 }
 
 func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn) bool {
+	fmt.Printf("[%s : %d] handleCommand SessionData:\n", sessionData.IpAddr, sessionData.LocalDisc)
+	fmt.Println(*sessionData)
+
 	switch command.Type {
 	case SHUTDOWN:
 
@@ -406,12 +409,17 @@ func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn
 
 	case CHANGE_MODE:
 
-		// ensure valid toggle
+		// If we are in demand mode and are asked to move
+		// to demand mode, do nothing.
 		if sessionData.Flags&FLAG_DEMAND > 0 && command.Data.(uint32) == DEMAND {
+			fmt.Printf("[%s : %d] Invalid command, already in Demand mode.\n", sessionData.IpAddr, sessionData.LocalDisc)
 			return false
 		}
 
+		// If we are in ASYNC mode and are asked to
+		// move to ASYNC mode, do nothing?
 		if sessionData.Flags&FLAG_DEMAND == 0 && command.Data.(uint32) == ASYNC {
+			fmt.Printf("[%s : %d] Invalid command, already in Async mode.\n", sessionData.IpAddr, sessionData.LocalDisc)
 			return false
 		}
 
@@ -437,7 +445,7 @@ func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn
 	sessionData.Flags |= FLAG_POLL
 
 	// send control packet
-	fmt.Printf("[%s] [%s : %d] Sending control packet on command event.\n", sessionData.IpAddr, sessionData.LocalDisc)
+	fmt.Printf("[%s : %d] Sending control packet on command event.\n", sessionData.IpAddr, sessionData.LocalDisc)
 	_, err := sckt.Write(sessionData.MarshalControl())
 	if err != nil {
 		fmt.Println(err)
