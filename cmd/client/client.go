@@ -16,8 +16,11 @@ import (
 // var perfmap = flag.String("map", "perfmap", "Name of perfmap to read from")
 // var command = flag.String("cmd", "load", "load or unload a bpf")
 
+var createSession = flag.Bool("create", false, "Create a BFD Session with a given -remote server")
+var changeMode = flag.Bool("change-mode", false, "Change the mode of a given LocalDisc")
+var streamState = flag.Bool("stream", false, "Stream events for the given session")
+
 var remote = flag.String("remote", "", "Remote server to create session with")
-var stream = flag.Bool("stream", false, "Stream events for the given session")
 var mode = flag.String("mode", "", "Change the mode of a remote server")
 var id = flag.Uint("disc", 0, "The local discriminator of the session")
 
@@ -35,9 +38,9 @@ func main() {
 
 	client := bfdpb.NewBFDClient(conn)
 
-	if !*stream && *mode == "" {
+	if *createSession {
 		if *remote == "" {
-			panic("-remote is required.")
+			panic("-remote is required for creating a session.")
 		}
 
 		ip := net.ParseIP(*remote)
@@ -54,21 +57,12 @@ func main() {
 
 		fmt.Printf("Started session with: %s\n", *remote)
 		fmt.Printf("Session ID: %d\n", resp.GetLocalId())
-	} else if *mode == "" {
-		if *remote == "" {
-			panic("-remote is required.")
-		}
-
-		ip := net.ParseIP(*remote)
-		if ip == nil || ip.To4() == nil {
-			panic("-remote must be a valid IPv4 address in dot notation")
-		}
-
+	} else if *streamState {
 		req := &bfdpb.SessionStateRequest{LocalId: uint32(*id)}
 		infoEvents, err := client.SessionState(context.Background(), req)
 		if err != nil {
-			d := fmt.Sprintf("Unable to create session for %s", ip.String())
-			panic(d)
+			// d := fmt.Sprintf("Unable to stream the state for %d", ip.String())
+			panic(err)
 		}
 
 		for {
@@ -78,7 +72,7 @@ func main() {
 			}
 			fmt.Println(info)
 		}
-	} else {
+	} else if *changeMode {
 		changeMode := bfdpb.Mode_value[*mode]
 		req := &bfdpb.ChangeModeRequest{LocalId: uint32(*id), Mode: bfdpb.Mode(changeMode)}
 		_, err = client.ChangeMode(context.Background(), req)
