@@ -87,7 +87,7 @@ func (ses *Session) MarshalSession() []byte {
 	state |= uint8((ses.Flags & FLAG_DEMAND) << 3)       // 0b10 << 2 -> 0b|1| |00| |00|
 	state |= (uint8(ses.RemoteState) & FLAG_DEMAND) << 4 // 0b10 << 2 -> 0b|1| |1| |00| |00|
 
-	binary.Write(buf, binary.LittleEndian, ses.State)
+	binary.Write(buf, binary.LittleEndian, state)
 
 	binary.Write(buf, binary.LittleEndian, ses.Diagnostic)
 	binary.Write(buf, binary.LittleEndian, ses.DetectMulti)
