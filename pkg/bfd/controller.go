@@ -54,10 +54,7 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 			case STATE_DOWN:
 				// Either on creation or link down, either way try sending BFD control packets
 				sesInfo := startSession(events, sessionData, sessionMap, sckt)
-
-				// select {
-				// 	case sessionInfo <- *sesInfo
-				// }
+				sessionInfo <- *sesInfo
 
 				if sesInfo.Error != nil {
 					return
@@ -120,6 +117,8 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 
 	// Send first control packet
 	sessionData.Flags |= FLAG_POLL
+	sessionData.RemoteState = STATE_DOWN
+
 	_, err := sckt.Write(sessionData.MarshalControl())
 	if err != nil {
 		fmt.Println(err)
@@ -139,6 +138,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 				sessionData.RemoteEchoRx = event.NewRemoteEchoRx
 
 				sessionData.State = STATE_UP
+				sessionData.RemoteState = STATE_INIT
 
 				// must send final control packet for updated state
 				fmt.Printf("[%s] [%s : %d] Sending state UP control packet\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
@@ -155,6 +155,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 			} else if event.NewRemoteState == STATE_UP && sessionData.State == STATE_UP {
 				// waiting for other side
 				fmt.Printf("[%s] [%s : %d] Recieved remote State up, handshake complete moving to async.\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
+				sessionData.RemoteState = STATE_UP
 
 				// remove poll flag
 				sessionData.Flags &= (FLAG_POLL ^ 0xff)
@@ -207,6 +208,8 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 				sessionData.RemoteMinTx = event.NewRemoteMinTx
 				sessionData.RemoteEchoRx = event.NewRemoteEchoRx
 				sessionData.State = STATE_UP
+				sessionData.RemoteState = STATE_UP
+
 				writeSession(sessionMap, sessionData)
 
 				// // must send final control packet for updated state
@@ -308,6 +311,8 @@ func maintainSessionAsync(events chan PerfEvent, commands chan CommandEvent, ses
 			if dropCount >= int(sessionData.DetectMulti) {
 				fmt.Printf("[%s] [%s : %d] remote down, [%d missed]\n", rxTimeOut.Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, dropCount)
 				sessionData.State = STATE_DOWN
+				sessionData.RemoteState = STATE_DOWN
+
 				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote control timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 
@@ -389,7 +394,8 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 			dropCount++
 			if dropCount >= int(sessionData.DetectMulti) {
 				sessionData.State = STATE_DOWN
-				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out\n", sessionData.IpAddr, sessionData.LocalDisc)}
+				sessionData.RemoteState = STATE_DOWN
+				return &SessionInfo{sessionData.LocalDisc, STATE_DOWN, fmt.Errorf("[%s : %d] remote echo timed out", sessionData.IpAddr, sessionData.LocalDisc)}
 			}
 
 			echoRxTimer.Reset(time.Duration(sessionData.MinEchoTx) * time.Microsecond)

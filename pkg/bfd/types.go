@@ -53,7 +53,9 @@ const (
 // Session describes a BFD session in userspace
 // and in the XDP map
 type Session struct {
-	State      BfdState
+	State       BfdState
+	RemoteState BfdState
+
 	Diagnostic BfdDiagnostic
 
 	DetectMulti uint8
@@ -80,9 +82,16 @@ type Session struct {
 func (ses *Session) MarshalSession() []byte {
 	buf := bytes.NewBuffer([]uint8{})
 
+	state := uint8(ses.State & 0b11)                     // 0b|00|
+	state |= uint8((ses.RemoteState & 0b11) << 2)        // 0b|00| |00|
+	state |= uint8((ses.Flags & FLAG_DEMAND) << 3)       // 0b10 << 2 -> 0b|1| |00| |00|
+	state |= (uint8(ses.RemoteState) & FLAG_DEMAND) << 4 // 0b10 << 2 -> 0b|1| |1| |00| |00|
+
 	binary.Write(buf, binary.LittleEndian, ses.State)
+
 	binary.Write(buf, binary.LittleEndian, ses.Diagnostic)
 	binary.Write(buf, binary.LittleEndian, ses.DetectMulti)
+	// binary.Write(buf, binary.LittleEndian, ses.Flags)
 	binary.Write(buf, binary.LittleEndian, ses.LocalDisc)
 	binary.Write(buf, binary.LittleEndian, ses.RemoteDisc)
 	binary.Write(buf, binary.LittleEndian, ses.MinTx)
