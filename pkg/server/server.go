@@ -309,8 +309,6 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 			respInfo.Error = info.Error.Error()
 		}
 
-		respInfo.Error = info.Error.Error()
-
 		err = res.Send(respInfo)
 		if err != nil {
 			return err
