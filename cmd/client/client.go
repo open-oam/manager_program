@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"time"
 
 	bfdpb "github.com/open-oam/manager_program/gen/proto/bfd"
+	"github.com/open-oam/manager_program/pkg/bfd"
 	"google.golang.org/grpc"
 )
 
@@ -65,12 +67,15 @@ func main() {
 			panic(err)
 		}
 
+		fmt.Printf("Streaming State changes for %d:\n", *id)
+
 		for {
 			info, err := infoEvents.Recv()
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println(info)
+
+			fmt.Printf("[%s] %d: %s", time.Now().Format(time.RFC3339Nano), info.LocalId, bfd.BfdState(info.State).String())
 		}
 	} else if *changeMode {
 		changeMode := bfdpb.Mode_value[*mode]
