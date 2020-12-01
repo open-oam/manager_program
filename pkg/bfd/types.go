@@ -92,7 +92,7 @@ type EchoPacket struct {
 const (
 	VERSION          uint8  = 1
 	BFD_PORT         int    = 3784
-	RESPONSE_TIMEOUT uint32 = 2000 // miliseconds
+	RESPONSE_TIMEOUT uint32 = 1_000_000 // microseconds
 )
 
 // BFD Flags

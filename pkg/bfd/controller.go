@@ -103,10 +103,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 	* where it will change to UP state send final control packet and return.
 	 */
 
-	timeOut := sessionData.MinRx
-	if timeOut < sessionData.MinTx {
-		timeOut = sessionData.MinTx
-	}
+	timeOut := RESPONSE_TIMEOUT
 
 	fmt.Printf("[%s] [%s : %d] Starting session with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
 
@@ -494,20 +491,3 @@ func (controller *SessionController) SendEvent(event PerfEvent) {
 func (controller *SessionController) SendCommand(command CommandEvent) {
 	controller.command <- command
 }
-
-// type StateUpdate int
-
-// const (
-// 	A StateUpdate = iota
-// 	B
-// 	C
-// )
-
-// type Command int
-
-// const (
-// 	Stop Command = iota
-// 	Pause
-// 	ModeAsync
-// 	ModeDemand
-// )

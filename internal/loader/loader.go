@@ -31,7 +31,6 @@ func (storage *BpfInfo) Load(iface string, elfPath string, programName string) {
 	printBpfInfo(storage.Bpf)
 
 	fmt.Printf("%+v\n", storage.Bpf)
-	fmt.Println("Here")
 
 	// Find special "PERF_EVENT" eBPF map
 	// storage.Perfmap = storage.Bpf.GetMapByName("perfmap")
