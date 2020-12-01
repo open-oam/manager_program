@@ -339,7 +339,12 @@ func (ses *Session) MarshalEcho() []byte {
 
 	// not sure what code and reply stand for
 	//binary.Write(buf, binary.BigEndian, ( (pck.Code | (pck.Reply << 4) | (VERSION << 5))
-	binary.Write(buf, binary.LittleEndian, (1 | (0 << 4) | (VERSION << 5)))
+	// binary.Write(buf, binary.LittleEndian, uint32((1 | (0 << 4) | (VERSION << 5))))
+
+	binary.Write(buf, binary.LittleEndian, uint8(1)) // version
+	binary.Write(buf, binary.LittleEndian, uint8(0)) // code
+	binary.Write(buf, binary.LittleEndian, uint8(0)) // reply
+	binary.Write(buf, binary.LittleEndian, uint8(0)) // empty
 
 	binary.Write(buf, binary.LittleEndian, ses.LocalDisc)
 	binary.Write(buf, binary.LittleEndian, ses.RemoteDisc)
