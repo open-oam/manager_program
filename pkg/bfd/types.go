@@ -341,16 +341,16 @@ func (ses *Session) MarshalEcho() []byte {
 	//binary.Write(buf, binary.BigEndian, ( (pck.Code | (pck.Reply << 4) | (VERSION << 5))
 	// binary.Write(buf, binary.LittleEndian, uint32((1 | (0 << 4) | (VERSION << 5))))
 
-	binary.Write(buf, binary.LittleEndian, uint8(1)) // version
-	binary.Write(buf, binary.LittleEndian, uint8(0)) // code
-	binary.Write(buf, binary.LittleEndian, uint8(0)) // reply
-	binary.Write(buf, binary.LittleEndian, uint8(0)) // empty
+	binary.Write(buf, binary.BigEndian, uint8(1)) // version
+	binary.Write(buf, binary.BigEndian, uint8(0)) // code
+	binary.Write(buf, binary.BigEndian, uint8(0)) // reply
+	binary.Write(buf, binary.BigEndian, uint8(0)) // empty
 
-	binary.Write(buf, binary.LittleEndian, ses.LocalDisc)
-	binary.Write(buf, binary.LittleEndian, ses.RemoteDisc)
+	binary.Write(buf, binary.BigEndian, ses.LocalDisc)
+	binary.Write(buf, binary.BigEndian, ses.RemoteDisc)
 
 	// need to be microsecond timestamp
-	binary.Write(buf, binary.LittleEndian, int32((int64(time.Nanosecond) * time.Now().UnixNano() / int64(time.Microsecond))))
+	binary.Write(buf, binary.BigEndian, int32((int64(time.Nanosecond) * time.Now().UnixNano() / int64(time.Microsecond))))
 
 	return buf.Bytes()
 }
