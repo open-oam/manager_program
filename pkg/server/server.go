@@ -292,10 +292,23 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 	id := LocalDisc(req.GetLocalId())
 
 	infoEvents, err := server.createSub(id)
+
+	controller, ok := server.sessions[id]
+	initialInfo := &bfdpb.SessionInfo{LocalId: uint32(id), State: uint32(controller.SessionData.State), Error: ""}
+
+	if !ok {
+		return fmt.Errorf("Unkown ID: %d", id)
+	}
+
 	if err != nil {
 		return err
 	}
 	defer server.removeSub(id)
+
+	err = res.Send(initialInfo)
+	if err != nil {
+		return err
+	}
 
 	for {
 		info := <-infoEvents

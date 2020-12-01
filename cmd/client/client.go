@@ -75,7 +75,7 @@ func main() {
 				panic(err)
 			}
 
-			fmt.Printf("[%s] %d: %s", time.Now().Format(time.RFC3339Nano), info.LocalId, bfd.BfdState(info.State).String())
+			fmt.Printf("[%s] %d: %s\n", time.Now().Format(time.RFC3339Nano), info.LocalId, bfd.BfdState(info.State).String())
 		}
 	} else if *changeMode {
 		changeMode := bfdpb.Mode_value[*mode]

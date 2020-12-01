@@ -321,7 +321,8 @@ const (
 type SessionInfo struct {
 	LocalId uint32
 	State   BfdState
-	Error   error
+	// uint32	Mode
+	Error error
 }
 
 func (ses *Session) MarshalControl() []byte {
