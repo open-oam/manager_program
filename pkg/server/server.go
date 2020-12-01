@@ -153,6 +153,12 @@ func New(config ServerConfig) (*Server, error) {
 				session.SendEvent(event)
 
 			case sessionInfo := <-server.sessionInfo:
+				id := LocalDisc(sessionInfo.LocalId)
+
+				if c, ok := server.subs[id]; ok {
+					c <- sessionInfo
+				}
+
 				if sessionInfo.Error != nil || sessionInfo.State == bfd.STATE_ADMIN_DOWN {
 					server.lock.Lock()
 					defer server.lock.Unlock()
@@ -268,6 +274,9 @@ func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessio
 	fmt.Printf("Create Session: %s\n", req.IPAddr)
 
 	server.lock.Lock()
+
+	fmt.Println("Defering the unlock")
+
 	defer server.lock.Unlock()
 
 	controller := server.newSession(nil, req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, false) // req.DetectMulti, req.Mode
