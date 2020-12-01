@@ -303,6 +303,12 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 		respInfo := &bfdpb.SessionInfo{}
 		respInfo.LocalId = info.LocalId
 		respInfo.State = uint32(info.State)
+		respInfo.Error = ""
+
+		if info.Error != nil {
+			respInfo.Error = info.Error.Error()
+		}
+
 		respInfo.Error = info.Error.Error()
 
 		err = res.Send(respInfo)
