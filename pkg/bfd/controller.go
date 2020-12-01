@@ -398,7 +398,6 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 }
 
 func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn) bool {
-
 	switch command.Type {
 	case SHUTDOWN:
 

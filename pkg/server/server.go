@@ -305,7 +305,7 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 
 func (server *Server) ChangeMode(ctx context.Context, req *bfdpb.ChangeModeRequest) (*bfdpb.Empty, error) {
 	localId := LocalDisc(req.LocalId)
-	mode := req.Mode
+	mode := uint32(req.Mode)
 
 	server.lock.Lock()
 
