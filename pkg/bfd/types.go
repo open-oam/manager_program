@@ -16,6 +16,36 @@ const (
 	STATE_UP         BfdState = 3 // Up
 )
 
+// func (s BfdState) String() string {
+// 	if s == 0 {
+// 		return "Empty"
+// 	}
+
+// 	ret := ""
+
+// 	if s&1 == 1 {
+// 		ret += "ADMIN_DOWN"
+// 	}
+
+// 	if s&STATE_DOWN == STATE_DOWN {
+// 		if ret != "" {
+// 			ret += "+"
+// 		}
+
+// 		ret += "DOWN"
+// 	}
+
+// 	if s&STATE_DOWN == STATE_DOWN {
+// 		if ret != "" {
+// 			ret += "+"
+// 		}
+
+// 		ret += "DOWN"
+// 	}
+
+// 	return ret
+// }
+
 // BFD Diagnostics
 type BfdDiagnostic uint8
 
@@ -156,8 +186,8 @@ const (
 )
 
 const (
-	ASYNC  int32 = 0
-	DEMAND int32 = 1
+	ASYNC  uint32 = 0
+	DEMAND uint32 = 1
 )
 
 type CommandEvent struct {
