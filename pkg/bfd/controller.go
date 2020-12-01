@@ -495,7 +495,7 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 	}
 
 	if event.Flags&EVENT_CHNG_DEMAND > 0 {
-		sessionData.Flags |= FLAG_DEMAND
+		sessionData.Flags ^= FLAG_DEMAND
 	}
 
 }
