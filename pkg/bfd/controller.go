@@ -23,8 +23,8 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 	controller := &SessionController{}
 
 	sessionMap := (*bpf).GetMapByName("session_map")
-	events := make(chan PerfEvent)
-	commands := make(chan CommandEvent)
+	events := make(chan PerfEvent, 1024)
+	commands := make(chan CommandEvent, 1024)
 
 	sessionData.LocalDisc = id
 	controller.Id = id
@@ -54,7 +54,10 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 			case STATE_DOWN:
 				// Either on creation or link down, either way try sending BFD control packets
 				sesInfo := startSession(events, sessionData, sessionMap, sckt)
-				sessionInfo <- *sesInfo
+
+				// select {
+				// 	case sessionInfo <- *sesInfo
+				// }
 
 				if sesInfo.Error != nil {
 					return
@@ -97,6 +100,10 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 
 	return &SessionController{id, sessionMap, sessionData, events, commands} //, state, commands}
 }
+
+// func (controller *SessionController) sendSessionInfo(info SessionInfo) {
+
+// }
 
 func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*

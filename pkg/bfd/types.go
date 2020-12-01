@@ -16,35 +16,20 @@ const (
 	STATE_UP         BfdState = 3 // Up
 )
 
-// func (s BfdState) String() string {
-// 	if s == 0 {
-// 		return "Empty"
-// 	}
-
-// 	ret := ""
-
-// 	if s&1 == 1 {
-// 		ret += "ADMIN_DOWN"
-// 	}
-
-// 	if s&STATE_DOWN == STATE_DOWN {
-// 		if ret != "" {
-// 			ret += "+"
-// 		}
-
-// 		ret += "DOWN"
-// 	}
-
-// 	if s&STATE_DOWN == STATE_DOWN {
-// 		if ret != "" {
-// 			ret += "+"
-// 		}
-
-// 		ret += "DOWN"
-// 	}
-
-// 	return ret
-// }
+func (s BfdState) String() string {
+	switch s {
+	case STATE_ADMIN_DOWN:
+		return "ADMIN_DOWN"
+	case STATE_DOWN:
+		return "DOWN"
+	case STATE_INIT:
+		return "INIT"
+	case STATE_UP:
+		return "UP"
+	default:
+		return "UNK"
+	}
+}
 
 // BFD Diagnostics
 type BfdDiagnostic uint8

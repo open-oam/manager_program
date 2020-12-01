@@ -56,8 +56,7 @@ func New(config ServerConfig) (*Server, error) {
 	server.config = config
 	server.sessions = make(map[LocalDisc]*bfd.SessionController)
 	server.subs = make(map[LocalDisc]chan bfd.SessionInfo)
-	// server.ipAddrs = make(map[string]LocalDisc)
-	server.sessionInfo = make(chan bfd.SessionInfo)
+	server.sessionInfo = make(chan bfd.SessionInfo, 1024)
 	server.lock = new(sync.Mutex)
 
 	bpf := loader.LoadNewBPF(config.Iface, "./xdp.elf", "xdp_prog")
@@ -251,7 +250,7 @@ func (server *Server) createSub(id LocalDisc) (<-chan bfd.SessionInfo, error) {
 	// 	return nil, fmt.Errorf("IPAddr not found: %s", ipAddr)
 	// }
 
-	c := make(chan bfd.SessionInfo)
+	c := make(chan bfd.SessionInfo, 1024)
 	server.subs[id] = c
 
 	return c, nil
