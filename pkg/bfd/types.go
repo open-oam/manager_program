@@ -339,13 +339,13 @@ func (ses *Session) MarshalEcho() []byte {
 
 	// not sure what code and reply stand for
 	//binary.Write(buf, binary.BigEndian, ( (pck.Code | (pck.Reply << 4) | (VERSION << 5))
-	binary.Write(buf, binary.BigEndian, (1 | (0 << 4) | (VERSION << 5)))
+	binary.Write(buf, binary.LittleEndian, (1 | (0 << 4) | (VERSION << 5)))
 
-	binary.Write(buf, binary.BigEndian, ses.LocalDisc)
-	binary.Write(buf, binary.BigEndian, ses.RemoteDisc)
+	binary.Write(buf, binary.LittleEndian, ses.LocalDisc)
+	binary.Write(buf, binary.LittleEndian, ses.RemoteDisc)
 
 	// need to be microsecond timestamp
-	binary.Write(buf, binary.BigEndian, int32((int64(time.Nanosecond) * time.Now().UnixNano() / int64(time.Microsecond))))
+	binary.Write(buf, binary.LittleEndian, int32((int64(time.Nanosecond) * time.Now().UnixNano() / int64(time.Microsecond))))
 
 	return buf.Bytes()
 }
@@ -353,11 +353,11 @@ func (ses *Session) MarshalEcho() []byte {
 func (pck *EchoPacket) Marshal() []byte {
 	buf := bytes.NewBuffer([]uint8{})
 
-	binary.Write(buf, binary.BigEndian, (pck.Code | (pck.Reply << 4) | (pck.Version << 5)))
+	binary.Write(buf, binary.LittleEndian, (pck.Code | (pck.Reply << 4) | (pck.Version << 5)))
 
-	binary.Write(buf, binary.BigEndian, pck.LocalDisc)
-	binary.Write(buf, binary.BigEndian, pck.RemoteDisc)
-	binary.Write(buf, binary.BigEndian, pck.Timestamp)
+	binary.Write(buf, binary.LittleEndian, pck.LocalDisc)
+	binary.Write(buf, binary.LittleEndian, pck.RemoteDisc)
+	binary.Write(buf, binary.LittleEndian, pck.Timestamp)
 
 	return buf.Bytes()
 }
