@@ -464,10 +464,6 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 		sessionData.RemoteDisc = event.NewRemoteDisc
 	}
 
-	if event.Flags&EVENT_CHNG_DEMAND > 0 {
-		sessionData.Flags |= FLAG_DEMAND // | sessionData.Flags
-	}
-
 	if event.Flags&EVENT_CHNG_STATE > 0 {
 
 		switch event.NewRemoteState {

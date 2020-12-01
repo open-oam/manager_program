@@ -3,6 +3,7 @@ package bfd
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"time"
 )
 
@@ -159,6 +160,96 @@ type PerfEvent struct {
 	NewRemoteMinTx  uint32
 	NewRemoteMinRx  uint32
 	NewRemoteEchoRx uint32
+}
+
+func (e PerfEvent) String() string {
+	return fmt.Sprintf("{%d, %s, %s, L%d, IP%d, T%d, RD%d, RMT%d, RMR%d, RMER%d}", e.Diagnostic, e.NewRemoteState, flagsToString(e.Flags), e.LocalDisc, e.IpAddr, e.Timestamp, e.NewRemoteDisc, e.NewRemoteMinTx, e.NewRemoteMinRx, e.NewRemoteEchoRx)
+}
+
+// EVENT_RX_CONTROL       uint16 = 0x00
+// EVENT_RX_ECHO          uint16 = 0x01
+// EVENT_RX_FINAL         uint16 = 0x02
+// EVENT_CREATE_SESSION   uint16 = 0x04
+// EVENT_TEARDOWN_SESSION uint16 = 0x08
+
+// EVENT_CHNG_STATE  uint16 = 0x10
+// EVENT_CHNG_DEMAND uint16 = 0x20
+// EVENT_CHNG_DISC   uint16 = 0x40
+// EVENT_CHNG_TIMING uint16 = 0x80
+// )
+
+func flagsToString(flags uint16) string {
+	ret := ""
+
+	// RX_CONTROl
+	if flags&1 == 1 {
+		ret += "RX_CONTROL"
+	}
+
+	if flags&EVENT_RX_ECHO == EVENT_RX_ECHO {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "RX_ECHO"
+	}
+
+	if flags&EVENT_RX_FINAL == EVENT_RX_FINAL {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "RX_FINAL"
+	}
+
+	if flags&EVENT_CREATE_SESSION == EVENT_CREATE_SESSION {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "CREATE_SESSION"
+	}
+	if flags&EVENT_TEARDOWN_SESSION == EVENT_TEARDOWN_SESSION {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "TEARDOWN_SESSION"
+	}
+
+	if flags&EVENT_CHNG_STATE == EVENT_CHNG_STATE {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "CHNG_STATE"
+	}
+
+	if flags&EVENT_CHNG_DEMAND == EVENT_CHNG_DEMAND {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "CHNG_DEMAND"
+	}
+
+	if flags&EVENT_CHNG_DISC == EVENT_CHNG_DISC {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "CHNG_DISC"
+	}
+
+	if flags&EVENT_CHNG_TIMING == EVENT_CHNG_TIMING {
+		if ret != "" {
+			ret += "+"
+		}
+
+		ret += "RX_ECHO"
+	}
+
+	return ret
 }
 
 const (
