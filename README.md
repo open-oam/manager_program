@@ -76,6 +76,6 @@ There is not yet a good way to programmatically kill a stream. For now, simply `
 
 The overall architecture is represented in the following diagram:
 
-[arch]: https://github.com/open-oam/manager_program/res/bfd_architecture.jpg
+[arch]: https://github.com/open-oam/manager_program/blob/master/res/bfd_architecture.jpg
 
 ![bfd architecture][arch]
