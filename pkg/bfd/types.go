@@ -266,11 +266,6 @@ const (
 type CommandEvent struct {
 	Type uint8       // = ChangeMode
 	Data interface{} // uint32
-	// todo
-	// timing change
-	// toggle demand mode
-	// detect multi
-	//
 }
 
 func NewCommandEvent(Type uint8, Data interface{}) CommandEvent {
@@ -309,7 +304,6 @@ const (
 type SessionInfo struct {
 	LocalId uint32
 	State   BfdState
-	// uint32	Mode
 	Error error
 }
 
@@ -334,7 +328,7 @@ func (ses *Session) MarshalControl() []byte {
 
 func (ses *Session) MarshalEcho() []byte {
 	buf := bytes.NewBuffer([]uint8{})
-	
+
 	binary.Write(buf, binary.BigEndian, uint8(1)) // version
 	binary.Write(buf, binary.BigEndian, uint8(0)) // code
 	binary.Write(buf, binary.BigEndian, uint8(0)) // reply

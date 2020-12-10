@@ -17,13 +17,7 @@ import (
 	"github.com/open-oam/manager_program/pkg/bfd"
 )
 
-// #define PROGKEY_PORT 1
-// #define PROGKEY_IFINDEX 2
-// #define PROGKEY_MIN_RX 3
-// #define PROGKEY_MIN_TX 4
-// #define PROGKEY_MIN_ECHO_RX 5
-// #define PROGKEY_DETECT_MULTI 6
-
+// ServerConfig holds the configurable parameters of a server
 type ServerConfig struct {
 	Iface       string
 	Port        uint32
@@ -33,19 +27,18 @@ type ServerConfig struct {
 	DetectMulti uint32
 }
 
+// LocalDisc Type for Unique session discriminator
 type LocalDisc uint32
 
+// Server is the main object creating/removing and storing all sessions
 type Server struct {
-	iface    string
-	config   ServerConfig
-	sessions map[LocalDisc]*bfd.SessionController
-	subs     map[LocalDisc]chan bfd.SessionInfo
-	// ipAddrs     map[string]LocalDisc
+	iface       string
+	config      ServerConfig
+	sessions    map[LocalDisc]*bfd.SessionController
+	subs        map[LocalDisc]chan bfd.SessionInfo
 	sessionInfo chan bfd.SessionInfo
 	lock        *sync.Mutex
 	Bpf         *loader.BpfInfo
-	// kill   chan bool
-	// events chan PerfEventItem
 }
 
 // New Create a new Server from the given config and interface
@@ -146,7 +139,6 @@ func New(config ServerConfig) (*Server, error) {
 					controller.Id = uint32(id)
 
 					server.sessions[id] = controller
-					// server.ipAddrs[ipAddr] = id
 				}
 
 				session := server.sessions[id]
@@ -173,9 +165,6 @@ func New(config ServerConfig) (*Server, error) {
 						fmt.Printf("[%s] server: [%s : %d] Change to Admin Down... tearing down\n", time.Now().Format(time.StampMicro), ipAddr, sessionInfo.LocalId)
 					}
 
-					// Delete the IpAddr -> LocalDisc
-					// delete(server.ipAddrs, ipAddr)
-
 					// Delete the session
 					delete(server.sessions, id)
 				}
@@ -187,13 +176,13 @@ func New(config ServerConfig) (*Server, error) {
 
 	// Finally, attach the interface:
 	server.Bpf.AttachToInterface(config.Iface)
-
-	// TODO: Finish BPF initialization, make goroutine to send events over
-	// server := Server{}
 	return server, nil
 }
 
 func (server *Server) newSession(localDisc *LocalDisc, ipAddr string, desiredTx uint32, desiredRx uint32, echoRx uint32, isInit bool) *bfd.SessionController {
+	/*
+	*  Function creates and initializes a new session with a new sessionController.
+	 */
 
 	// Create a new session keys
 	var key LocalDisc
@@ -211,7 +200,6 @@ func (server *Server) newSession(localDisc *LocalDisc, ipAddr string, desiredTx 
 	sessionData.IpAddr = ipAddr
 	sessionData.Flags |= bfd.FLAG_CONTROL_PLANE_IND // because we encapsulate in udp
 
-	// todo: not sure mapping these correctly
 	if desiredTx > 0 {
 		sessionData.MinTx = desiredTx
 	}
@@ -233,11 +221,10 @@ func (server *Server) newSession(localDisc *LocalDisc, ipAddr string, desiredTx 
 	return bfd.NewController(uint32(key), &server.Bpf.Bpf, sessionData, server.sessionInfo)
 }
 
-// func (server *Server) acceptNewSession(ipAddr string, ...) {
-
-// }
-
 func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
+	/*
+	* Creates a unique u32 LocalDisc for session.
+	 */
 	for {
 		key := LocalDisc(rand.Uint32())
 
@@ -248,13 +235,12 @@ func newKey(sessions map[LocalDisc]*bfd.SessionController) LocalDisc {
 }
 
 func (server *Server) createSub(id LocalDisc) (<-chan bfd.SessionInfo, error) {
+	/*
+	* Creates a channel for sesssion info
+	 */
+
 	server.lock.Lock()
 	defer server.lock.Unlock()
-
-	// id, ok := server.ipAddrs[ipAddr]
-	// if !ok {
-	// 	return nil, fmt.Errorf("IPAddr not found: %s", ipAddr)
-	// }
 
 	c := make(chan bfd.SessionInfo, 1024)
 	server.subs[id] = c
@@ -263,32 +249,32 @@ func (server *Server) createSub(id LocalDisc) (<-chan bfd.SessionInfo, error) {
 }
 
 func (server *Server) removeSub(id LocalDisc) {
+	/*
+	* Deletes a channel for sesssion info
+	 */
+
 	server.lock.Lock()
 	defer server.lock.Unlock()
 
-	// id := server.ipAddrs[ipAddr]
 	delete(server.subs, id)
 }
 
+// CreateSession Creates a new session from the gRPC api side.
 func (server *Server) CreateSession(ctx context.Context, req *bfdpb.CreateSessionRequest) (*bfdpb.CreateSessionResponse, error) {
-	fmt.Printf("Create Session: %s\n", req.IPAddr)
 
 	server.lock.Lock()
-
-	fmt.Println("Defering the unlock")
-
 	defer server.lock.Unlock()
 
-	controller := server.newSession(nil, req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, false) // req.DetectMulti, req.Mode
+	controller := server.newSession(nil, req.IPAddr, req.DesiredTx, req.DesiredRx, req.EchoRx, false)
 	key := LocalDisc(controller.Id)
 	server.sessions[key] = controller
-	// server.ipAddrs[req.IPAddr] = key
 
 	return &bfdpb.CreateSessionResponse{LocalId: uint32(key)}, nil
 }
 
+// 	SessionState Streams session state.
 func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD_SessionStateServer) error {
-	// ipAddr := req.IPAddr
+
 	id := LocalDisc(req.GetLocalId())
 
 	infoEvents, err := server.createSub(id)
@@ -329,7 +315,9 @@ func (server *Server) SessionState(req *bfdpb.SessionStateRequest, res bfdpb.BFD
 	}
 }
 
+// ChangeMode chanes the session mode, ASYNC -> DEMAND, DEMAND -> ASYNC
 func (server *Server) ChangeMode(ctx context.Context, req *bfdpb.ChangeModeRequest) (*bfdpb.Empty, error) {
+
 	localId := LocalDisc(req.LocalId)
 	mode := uint32(req.Mode)
 
@@ -347,25 +335,3 @@ func (server *Server) ChangeMode(ctx context.Context, req *bfdpb.ChangeModeReque
 
 	return &bfdpb.Empty{}, nil
 }
-
-// func (server *Server) mustEmbedUnimplementedBFDServer() {}
-
-// func (self Server) StreamPerf(empt *pingpb.Empty, stream pingpb.Pinger_StreamPerfServer) error {
-// 	fmt.Println("Streaming Perf Events")
-// 	for {
-// 		perfEvent := <-self.events
-
-// 		fmt.Println("Sending Event")
-// 		err := stream.SendMsg(&pingpb.PerfMessage{
-// 			Id:       uint32(perfEvent.ID),
-// 			Seq:      uint32(perfEvent.Seq),
-// 			OrigTime: perfEvent.OrigTime,
-// 			RecvTime: perfEvent.RecTime,
-// 			SrcIP:    perfEvent.SrcIP,
-// 		})
-// 		if err != nil {
-// 			fmt.Println(err)
-// 			return err
-// 		}
-// 	}
-// }

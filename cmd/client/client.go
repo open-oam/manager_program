@@ -12,12 +12,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// var iface = flag.String("iface", "enp5s0", "Interface to bind XDP program to")
-// var elf = flag.String("elf", "./xdp.elf", "clang/llvm compiled eBPF")
-// var programName = flag.String("program", "xdp_prog", "Name of XDP program (function name)")
-// var perfmap = flag.String("map", "perfmap", "Name of perfmap to read from")
-// var command = flag.String("cmd", "load", "load or unload a bpf")
-
 var createSession = flag.Bool("create", false, "Create a BFD Session with a given -remote server")
 var changeMode = flag.Bool("change-mode", false, "Change the mode of a given LocalDisc")
 var streamState = flag.Bool("stream", false, "Stream events for the given session")
@@ -63,7 +57,6 @@ func main() {
 		req := &bfdpb.SessionStateRequest{LocalId: uint32(*id)}
 		infoEvents, err := client.SessionState(context.Background(), req)
 		if err != nil {
-			// d := fmt.Sprintf("Unable to stream the state for %d", ip.String())
 			panic(err)
 		}
 
@@ -88,23 +81,4 @@ func main() {
 		fmt.Printf("Successfully changed modes to: %s\n", *mode)
 	}
 
-	// client.
-	// fmt.Println("Running command:", *command)
-	// if *command == "unload" {
-	// 	client.UnloadEbpf(context.Background(), &bfdpb.Empty{})
-	// 	os.Exit(0)
-	// }
-
-	// _, err = client.LoadEbpf(context.Background(), &bfdpb.LoadEbpfRequest{
-	// 	Interface: *iface,
-	// 	File:      *elf,
-	// 	Program:   *programName,
-	// 	PerfMap:   *perfmap,
-	// })
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	panic("Unable to load eBPF")
-	// }
-
-	// stream, _ := client.StreamPerf(context.Background(), &bfdpb.Empty{})
 }
