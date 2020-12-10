@@ -13,15 +13,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// type ServerConfig struct {
-// 	Iface       string
-// 	Port        uint32
-// 	MinRx       uint32
-// 	MinTx       uint32
-// 	EchoRx      uint32
-// 	DetectMulti uint32
-// }
-
 func main() {
 	iface := flag.String("i", "ens4", "The interface to attach the program to")
 	bfdPort := flag.Uint("b", 3784, "The eBPF intercept port for BFD Packets")

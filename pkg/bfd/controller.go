@@ -90,17 +90,11 @@ func NewController(id uint32, bpf *goebpf.System, sessionData *Session, sessionI
 				return
 			}
 
-			fmt.Printf("[%s] [%s : %d] Session state %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, sessionData.State)
-
 		}
 	}()
 
-	return &SessionController{id, sessionMap, sessionData, events, commands} //, state, commands}
+	return &SessionController{id, sessionMap, sessionData, events, commands}
 }
-
-// func (controller *SessionController) sendSessionInfo(info SessionInfo) {
-
-// }
 
 func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.Map, sckt *net.UDPConn) *SessionInfo {
 	/*
@@ -110,9 +104,7 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 	 */
 
 	timeOut := RESPONSE_TIMEOUT
-
 	fmt.Printf("[%s] [%s : %d] Starting session with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
-
 	txTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
 
 	// Send first control packet
@@ -150,7 +142,6 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 				writeSession(sessionMap, sessionData)
 
 				txTimer.Reset(time.Duration(timeOut) * time.Microsecond)
-				//return &SessionInfo{sessionData.LocalDisc, STATE_UP, nil}
 
 			} else if event.NewRemoteState == STATE_UP && sessionData.State == STATE_UP {
 				// waiting for other side
@@ -163,7 +154,6 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 
 			} else {
 				fmt.Printf("[%d] on startSession got NewRemoteState: %d instead of %d\n", sessionData.LocalDisc, event.NewRemoteState, STATE_INIT)
-				// not sure what other events possible, but will be discarded
 			}
 
 		case txTimeOut := <-txTimer.C:
@@ -187,12 +177,6 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 	 */
 	resTimer := time.NewTimer(time.Duration(RESPONSE_TIMEOUT) * time.Millisecond)
 
-	// // Send first control packet
-	// _, err := sckt.Write(sessionData.MarshalControl())
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
 	for {
 		select {
 		case event := <-events:
@@ -211,14 +195,6 @@ func initSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf.
 				sessionData.RemoteState = STATE_UP
 
 				writeSession(sessionMap, sessionData)
-
-				// // must send final control packet for updated state
-				// sessionData.Flags |= FLAG_POLL
-				// _, err := sckt.Write(sessionData.MarshalControl())
-				// if err != nil {
-				// 	fmt.Println(err)
-				// }
-				// sessionData.Flags &= (FLAG_POLL ^ 0xff)
 
 				return &SessionInfo{sessionData.LocalDisc, sessionData.State, nil}
 
@@ -404,12 +380,16 @@ func maintainSessionDemand(events chan PerfEvent, commands chan CommandEvent, se
 }
 
 func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn) bool {
+	/*
+	* This function parses user commands and sets the relevent session data fields.
+	* If the change requires control packet sent to remote, it is sent.
+	* Return True if expecting final response from remote, false if no response is expected.
+	 */
 	fmt.Printf("[%s : %d] handleCommand SessionData:\n", sessionData.IpAddr, sessionData.LocalDisc)
 	fmt.Println(*sessionData)
 
 	switch command.Type {
 	case SHUTDOWN:
-
 		// change state
 		sessionData.State = STATE_ADMIN_DOWN
 
@@ -442,7 +422,7 @@ func handleCommand(command CommandEvent, sessionData *Session, sckt *net.UDPConn
 		sessionData.MinEchoTx = command.Data.(uint32)
 
 	case CHANGE_MULTI:
-		// Multi is only onh our side and doesnt need to be updated over session
+		// Multi is only on our side and doesnt need to be updated over session
 		sessionData.DetectMulti = command.Data.(uint8)
 		return false
 	}
@@ -502,8 +482,6 @@ func updateSessionChange(event PerfEvent, sessionData *Session) {
 
 func writeSession(sessionMap goebpf.Map, sessionData *Session) {
 	disc := sessionData.LocalDisc
-	fmt.Printf("[%s] [%s : %d] Writing to session map with key: %d\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, disc)
-
 	err := sessionMap.Upsert(disc, sessionData.MarshalSession())
 	if err != nil {
 		fmt.Printf("[%s] [%s : %d] Failed to write to map.\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc)
