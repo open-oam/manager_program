@@ -103,8 +103,8 @@ func startSession(events chan PerfEvent, sessionData *Session, sessionMap goebpf
 	* where it will change to UP state send final control packet and return.
 	 */
 
-	fmt.Printf("[%s] [%s : %d] Starting session with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
 	timeOut := RESPONSE_TIMEOUT
+	fmt.Printf("[%s] [%s : %d] Starting session with %d timing\n", time.Now().Format(time.StampMicro), sessionData.IpAddr, sessionData.LocalDisc, time.Duration(timeOut)*time.Microsecond)
 	txTimer := time.NewTimer(time.Duration(timeOut) * time.Microsecond)
 
 	// Send first control packet
