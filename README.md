@@ -79,3 +79,11 @@ The overall architecture is represented in the following diagram:
 [arch]: https://github.com/open-oam/manager_program/blob/master/res/bfd_architecture.jpg
 
 ![bfd architecture][arch]
+
+Code for the main server process is under `pkg/server/server.go` and session controller lives under `pkg/bfd/controller.go`.
+
+PerfEvents from the kernel space are continuously read in a go routine spun-off during server initialization. These events are then multiplexed to the proper session controller based off of the local discriminator, or a new session controller is created.
+
+Write operations within a [Server](https://github.com/open-oam/manager_program/blob/master/pkg/server/server.go#L34) must first `Lock()` the server before they can commence. The server may be handling multiple requests in parallel and memory safety needs to be maintained.
+
+[SessionControllers](https://github.com/open-oam/manager_program/blob/master/pkg/bfd/controller.go#L13) use [PerfEvents](https://github.com/open-oam/manager_program/blob/master/pkg/bfd/types.go#L161) and flags within those events to either change modes, update [SessionState](https://github.com/open-oam/manager_program/blob/master/pkg/bfd/types.go#L55), or reset timers. 
