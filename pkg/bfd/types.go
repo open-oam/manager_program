@@ -175,18 +175,6 @@ func (e PerfEvent) String() string {
 	return fmt.Sprintf("{%d, %s, %s, L%d, IP%d, T%d, RD%d, RMT%d, RMR%d, RMER%d}", e.Diagnostic, e.NewRemoteState, flagsToString(e.Flags), e.LocalDisc, e.IpAddr, e.Timestamp, e.NewRemoteDisc, e.NewRemoteMinTx, e.NewRemoteMinRx, e.NewRemoteEchoRx)
 }
 
-// EVENT_RX_CONTROL       uint16 = 0x00
-// EVENT_RX_ECHO          uint16 = 0x01
-// EVENT_RX_FINAL         uint16 = 0x02
-// EVENT_CREATE_SESSION   uint16 = 0x04
-// EVENT_TEARDOWN_SESSION uint16 = 0x08
-
-// EVENT_CHNG_STATE  uint16 = 0x10
-// EVENT_CHNG_DEMAND uint16 = 0x20
-// EVENT_CHNG_DISC   uint16 = 0x40
-// EVENT_CHNG_TIMING uint16 = 0x80
-// )
-
 func flagsToString(flags uint16) string {
 	ret := ""
 
@@ -346,11 +334,7 @@ func (ses *Session) MarshalControl() []byte {
 
 func (ses *Session) MarshalEcho() []byte {
 	buf := bytes.NewBuffer([]uint8{})
-
-	// not sure what code and reply stand for
-	//binary.Write(buf, binary.BigEndian, ( (pck.Code | (pck.Reply << 4) | (VERSION << 5))
-	// binary.Write(buf, binary.LittleEndian, uint32((1 | (0 << 4) | (VERSION << 5))))
-
+	
 	binary.Write(buf, binary.BigEndian, uint8(1)) // version
 	binary.Write(buf, binary.BigEndian, uint8(0)) // code
 	binary.Write(buf, binary.BigEndian, uint8(0)) // reply
